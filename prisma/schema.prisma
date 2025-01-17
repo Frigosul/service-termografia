@@ -1,0 +1,99 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  password  String
+  userRole  String
+  createdAt DateTime @default(now())
+
+  @@map("users")
+}
+
+model Instrument {
+  id             String                   @id @default(uuid())
+  name           String                   @unique
+  type           String?                  @default("temp")
+  status         String
+  isSensorError  Boolean                  @default(false)
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @default(now())
+  displayOrder   Int                      @default(autoincrement())
+  error          String?
+  maxValue       Float                    @default(20)
+  minValue       Float                    @default(-20)
+  isActive       Boolean                  @default(true)
+  idSitrad       Int                      @default(0)
+  temperatures   InstrumentsTemperature[]
+  pressures      InstrumentsPressure[]
+  unionsAsFirst  UnionInstruments[]       @relation("FirstInstrumentRelation")
+  unionsAsSecond UnionInstruments[]       @relation("SecondInstrumentRelation")
+
+  @@map("instruments")
+}
+
+model Temperature {
+  id            String                   @id @default(uuid())
+  value         Float
+  createdAt     DateTime                 @default(now())
+  editValue     Float
+  updatedAt     DateTime?
+  userUpdatedAt String?
+  instruments   InstrumentsTemperature[]
+
+  @@map("temperatures")
+}
+
+model InstrumentsTemperature {
+  instrument_id  String
+  temperature_id String
+  instruments    Instrument  @relation(fields: [instrument_id], references: [id], onDelete: Cascade)
+  temperature    Temperature @relation(fields: [temperature_id], references: [id])
+
+  @@id([instrument_id, temperature_id])
+  @@map("temperature_instrument")
+}
+
+model Pressure {
+  id            String                @id @default(uuid())
+  value         Float
+  createdAt     DateTime              @default(now())
+  editValue     Float
+  updatedAt     DateTime?
+  userUpdatedAt String?
+  instruments   InstrumentsPressure[]
+
+  @@map("pressures")
+}
+
+model InstrumentsPressure {
+  instrument_id String
+  pressure_id   String
+  instruments   Instrument @relation(fields: [instrument_id], references: [id], onDelete: Cascade)
+  pressure      Pressure   @relation(fields: [pressure_id], references: [id])
+
+  @@id([instrument_id, pressure_id])
+  @@map("pressure_instrument")
+}
+
+model UnionInstruments {
+  id                   String     @id @default(uuid())
+  name                 String     @unique
+  firstInstrument      Instrument @relation("FirstInstrumentRelation", fields: [first_instrument_id], references: [id])
+  secondInstrument     Instrument @relation("SecondInstrumentRelation", fields: [second_instrument_id], references: [id])
+  first_instrument_id  String
+  second_instrument_id String
+  isActive             Boolean    @default(true)
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @default(now())
+
+  @@map("union_instruments")
+}
