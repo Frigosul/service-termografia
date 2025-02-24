@@ -34,12 +34,12 @@ export async function setSaveData() {
         };
         existInstrument
           ? await prisma.instrument.update({
-            where: { id: existInstrument.id },
-            data: {
-              ...instrumentData,
-              type: existInstrument.type
-            },
-          })
+              where: { id: existInstrument.id },
+              data: {
+                ...instrumentData,
+                type: existInstrument.type,
+              },
+            })
           : await prisma.instrument.create({ data: instrumentData });
       } else {
         const status = Array.from(
@@ -55,60 +55,67 @@ export async function setSaveData() {
           .filter(Boolean)
           .join(",");
 
-        const commonData = instrument.modelId === 67 ? {
-          idSitrad: instrument.id,
-          name: instrument.name,
-          status,
-          type: 'press',
-          updatedAt: dayjs().toDate(),
-          error: null,
-          isSensorError: instrument.IsErrorPressureSensor,
-          pressures: {
-            create: {
-              pressure: {
-                create: {
-                  value: instrument.GasPressure,
-                  editValue: instrument.GasPressure,
-                  createdAt: dayjs().toDate(),
-                  updatedAt: dayjs().toDate(),
+        const commonData =
+          instrument.modelId === 67
+            ? {
+                idSitrad: instrument.id,
+                name: instrument.name,
+                model: instrument.modelId,
+                status,
+                type: "press",
+                updatedAt: dayjs().toDate(),
+                error: null,
+                isSensorError: instrument.IsErrorPressureSensor,
+                pressures: {
+                  create: {
+                    pressure: {
+                      create: {
+                        value: instrument.GasPressure,
+                        editValue: instrument.GasPressure,
+                        createdAt: dayjs().toDate(),
+                        updatedAt: dayjs().toDate(),
+                      },
+                    },
+                  },
                 },
-              },
-            },
-
-          }
-        } : {
-          idSitrad: instrument.id,
-          name: instrument.name,
-          status,
-          type: 'temp',
-          updatedAt: dayjs().toDate(),
-          error: null,
-          isSensorError: instrument.modelId === 72 ? instrument.IsErrorS1 : instrument.IsSensorError,
-          temperatures: {
-            create: {
-              temperature: {
-                create: {
-                  value:
-                    instrument.modelId === 72
-                      ? instrument.Sensor1
-                      : instrument.Temperature,
-                  editValue:
-                    instrument.modelId === 72
-                      ? instrument.Sensor1
-                      : instrument.Temperature,
-                  createdAt: dayjs().toDate(),
-                  updatedAt: dayjs().toDate(),
+              }
+            : {
+                idSitrad: instrument.id,
+                name: instrument.name,
+                model: instrument.modelId,
+                status,
+                type: "temp",
+                updatedAt: dayjs().toDate(),
+                error: null,
+                isSensorError:
+                  instrument.modelId === 72
+                    ? instrument.IsErrorS1
+                    : instrument.IsSensorError,
+                temperatures: {
+                  create: {
+                    temperature: {
+                      create: {
+                        value:
+                          instrument.modelId === 72
+                            ? instrument.Sensor1
+                            : instrument.Temperature,
+                        editValue:
+                          instrument.modelId === 72
+                            ? instrument.Sensor1
+                            : instrument.Temperature,
+                        createdAt: dayjs().toDate(),
+                        updatedAt: dayjs().toDate(),
+                      },
+                    },
+                  },
                 },
-              },
-            },
-          }
-        };
+              };
 
         existInstrument
           ? await prisma.instrument.update({
-            where: { id: existInstrument.id },
-            data: commonData,
-          })
+              where: { id: existInstrument.id },
+              data: commonData,
+            })
           : await prisma.instrument.create({ data: commonData });
       }
     })

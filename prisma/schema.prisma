@@ -22,6 +22,7 @@ model Instrument {
   id             String                   @id @default(uuid())
   name           String                   @unique
   type           String?                  @default("temp")
+  model          Int?
   status         String
   isSensorError  Boolean                  @default(false)
   createdAt      DateTime                 @default(now())

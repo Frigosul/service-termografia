@@ -1,5 +1,5 @@
 import { PrismaClient } from "@prisma/client";
-import WebSocket from 'ws';
+import WebSocket from "ws";
 
 const prisma = new PrismaClient();
 
@@ -7,7 +7,9 @@ export async function querySummaryInstruments(ws: WebSocket) {
   const instruments = await prisma.instrument.findMany({
     select: {
       id: true,
+      idSitrad: true,
       name: true,
+      model: true,
       type: true,
       status: true,
       error: true,
@@ -21,16 +23,15 @@ export async function querySummaryInstruments(ws: WebSocket) {
             select: {
               editValue: true,
               createdAt: true,
-            }
+            },
           },
         },
         orderBy: {
           temperature: {
-            updatedAt: 'desc'
+            updatedAt: "desc",
           },
-
         },
-        take: 1
+        take: 1,
       },
       pressures: {
         select: {
@@ -38,56 +39,59 @@ export async function querySummaryInstruments(ws: WebSocket) {
             select: {
               editValue: true,
               createdAt: true,
-            }
+            },
           },
         },
         orderBy: {
           pressure: {
-            updatedAt: 'desc'
+            updatedAt: "desc",
           },
-
         },
-        take: 1
-      }
+        take: 1,
+      },
     },
     where: {
-      isActive: true
+      isActive: true,
     },
     orderBy: {
-      displayOrder: 'asc'
-    }
-  })
-
-
-  const formattedInstruments = instruments.map(instrument => {
-    return instrument.type === 'press' ? {
-      id: instrument.id,
-      name: instrument.name,
-      type: instrument.type,
-      status: instrument.status,
-      isSensorError: instrument.isSensorError,
-      pressure: instrument.pressures?.[0].pressure?.editValue ?? null,
-      instrumentCreatedAt: instrument.createdAt,
-      createdAt: instrument.temperatures?.[0].temperature.createdAt,
-      error: instrument.error,
-      maxValue: instrument.maxValue,
-      minValue: instrument.minValue,
-    } :
-      {
-        id: instrument.id,
-        name: instrument.name,
-        type: instrument.type,
-        status: instrument.status,
-        isSensorError: instrument.isSensorError,
-        temperature: instrument.temperatures?.[0]?.temperature?.editValue ?? null,
-        instrumentCreatedAt: instrument.createdAt,
-        createdAt: instrument.temperatures?.[0].temperature.createdAt,
-        error: instrument.error,
-        maxValue: instrument.maxValue,
-        minValue: instrument.minValue,
-      }
+      displayOrder: "asc",
+    },
   });
 
-  //send data to connected client
+  const formattedInstruments = instruments.map((instrument) => {
+    return instrument.type === "press"
+      ? {
+          id: instrument.id,
+          idSitrad: instrument.idSitrad,
+          name: instrument.name,
+          model: instrument.model,
+          type: instrument.type,
+          status: instrument.status,
+          isSensorError: instrument.isSensorError,
+          pressure: instrument.pressures?.[0].pressure?.editValue ?? null,
+          instrumentCreatedAt: instrument.createdAt,
+          createdAt: instrument.temperatures?.[0].temperature.createdAt,
+          error: instrument.error,
+          maxValue: instrument.maxValue,
+          minValue: instrument.minValue,
+        }
+      : {
+          id: instrument.id,
+          idSitrad: instrument.idSitrad,
+          name: instrument.name,
+          model: instrument.model,
+          type: instrument.type,
+          status: instrument.status,
+          isSensorError: instrument.isSensorError,
+          temperature:
+            instrument.temperatures?.[0]?.temperature?.editValue ?? null,
+          instrumentCreatedAt: instrument.createdAt,
+          createdAt: instrument.temperatures?.[0].temperature.createdAt,
+          error: instrument.error,
+          maxValue: instrument.maxValue,
+          minValue: instrument.minValue,
+        };
+  });
+
   ws.send(JSON.stringify(formattedInstruments));
 }
