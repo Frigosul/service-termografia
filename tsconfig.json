@@ -3,10 +3,10 @@
   "_version": "20.1.0",
   "compilerOptions": {
     "lib": [
-      "es2023"
+      "ES2023"
     ],
-    "module": "node16",
-    "target": "es2022",
+    "module": "node16",   
+    "target": "ES2023",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
