@@ -22,19 +22,19 @@ model Instrument {
   id             String                   @id @default(uuid())
   name           String                   @unique
   type           String?                  @default("temp")
-  model          Int?
   status         String
   isSensorError  Boolean                  @default(false)
   createdAt      DateTime                 @default(now())
   updatedAt      DateTime                 @default(now())
   displayOrder   Int                      @default(autoincrement())
   error          String?
+  idSitrad       Int                      @default(0)
+  isActive       Boolean                  @default(true)
   maxValue       Float                    @default(20)
   minValue       Float                    @default(-20)
-  isActive       Boolean                  @default(true)
-  idSitrad       Int                      @default(0)
-  temperatures   InstrumentsTemperature[]
+  model          Int?
   pressures      InstrumentsPressure[]
+  temperatures   InstrumentsTemperature[]
   unionsAsFirst  UnionInstruments[]       @relation("FirstInstrumentRelation")
   unionsAsSecond UnionInstruments[]       @relation("SecondInstrumentRelation")
 
@@ -88,13 +88,13 @@ model InstrumentsPressure {
 model UnionInstruments {
   id                   String     @id @default(uuid())
   name                 String     @unique
-  firstInstrument      Instrument @relation("FirstInstrumentRelation", fields: [first_instrument_id], references: [id])
-  secondInstrument     Instrument @relation("SecondInstrumentRelation", fields: [second_instrument_id], references: [id])
   first_instrument_id  String
   second_instrument_id String
   isActive             Boolean    @default(true)
   createdAt            DateTime   @default(now())
   updatedAt            DateTime   @default(now())
+  firstInstrument      Instrument @relation("FirstInstrumentRelation", fields: [first_instrument_id], references: [id])
+  secondInstrument     Instrument @relation("SecondInstrumentRelation", fields: [second_instrument_id], references: [id])
 
   @@map("union_instruments")
 }
