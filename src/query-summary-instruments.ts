@@ -15,6 +15,7 @@ export async function querySummaryInstruments(ws: WebSocket) {
       error: true,
       minValue: true,
       maxValue: true,
+      setPoint: true,
       createdAt: true,
       isSensorError: true,
       temperatures: {
@@ -74,6 +75,7 @@ export async function querySummaryInstruments(ws: WebSocket) {
           error: instrument.error,
           maxValue: instrument.maxValue,
           minValue: instrument.minValue,
+          setPoint: instrument.setPoint,
         }
       : {
           id: instrument.id,
@@ -90,6 +92,7 @@ export async function querySummaryInstruments(ws: WebSocket) {
           error: instrument.error,
           maxValue: instrument.maxValue,
           minValue: instrument.minValue,
+          setPoint: instrument.setPoint,
         };
   });
 
