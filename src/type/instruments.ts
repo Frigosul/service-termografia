@@ -1,9 +1,8 @@
-
 export interface IInstrument {
   id: number;
-  error?: string
-  GasPressure: number
-  IsErrorPressureSensor?: boolean
+  error?: string;
+  GasPressure: number;
+  IsErrorPressureSensor?: boolean;
   converterId: number;
   name: string;
   address: number;
@@ -27,9 +26,9 @@ export interface IInstrument {
   IsRefrigeration: boolean;
   IsHot: boolean;
   IsOutputFan: boolean;
-  IsOutputRefr: boolean
-  IsOutputDefr1: boolean
-  IsErrorS1: boolean
+  IsOutputRefr: boolean;
+  IsOutputDefr1: boolean;
+  IsErrorS1: boolean;
   enableOutputRefr: boolean;
   enableOutputDefr: boolean;
   enableOutputHot: boolean;
@@ -42,13 +41,14 @@ export interface IInstrument {
   IsManualDatalogger: boolean;
   dataloggerPercentUsage: number;
   internalRtc: string;
-  fncSetpoint: number;
-  fncDifferential: number;
+  FncSetpoint: number;
+  CurrentSetpoint: number;
+  FncDifferential: number;
   fncDigitalInput: number;
   remainingInhibitionTime: number | null;
-  Sensor1: number
-  Sensor2: number
+  Sensor1: number;
+  Sensor2: number;
 }
 export interface IInstruments {
-  results: IInstrument[]
+  results: IInstrument[];
 }

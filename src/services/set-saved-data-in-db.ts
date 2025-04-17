@@ -7,7 +7,6 @@ const prisma = new PrismaClient();
 export async function setSaveData() {
   const instrumentListWithValue = await getInstrumentsWithValues();
   if (!instrumentListWithValue) return;
-
   await Promise.all(
     instrumentListWithValue.map(async (instrument) => {
       const existInstrument = await prisma.instrument.findFirst({
@@ -66,6 +65,8 @@ export async function setSaveData() {
                 updatedAt: dayjs().toDate(),
                 error: null,
                 isSensorError: instrument.IsErrorPressureSensor,
+                setPoint: instrument.CurrentSetpoint ?? instrument.FncSetpoint,
+                differential: instrument.FncDifferential,
                 pressures: {
                   create: {
                     pressure: {
@@ -86,6 +87,8 @@ export async function setSaveData() {
                 status,
                 type: "temp",
                 updatedAt: dayjs().toDate(),
+                setPoint: instrument.CurrentSetpoint ?? instrument.FncSetpoint,
+                differential: instrument.FncDifferential,
                 error: null,
                 isSensorError:
                   instrument.modelId === 72
