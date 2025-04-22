@@ -2,19 +2,37 @@ import WebSocket from "ws";
 import { querySummaryInstruments } from "./query-summary-instruments";
 import { setSaveData } from "./services/set-saved-data-in-db";
 
-const ws = new WebSocket.Server({ port: 8080, host: "0.0.0.0" });
+const wss = new WebSocket.Server({ port: 8080, host: "0.0.0.0" });
 
-ws.on("connection", (ws) => {
+wss.on("connection", (ws) => {
   console.log("connected client");
+
   querySummaryInstruments(ws);
 
-  const interval = setInterval(() => {
+  const intervalData = setInterval(() => {
     querySummaryInstruments(ws);
-  }, 10000); // 10 seconds
+  }, 10000); // 10 seconds - seu envio de dados normal
+
+  // PING MANUAL
+  const intervalPing = setInterval(() => {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.ping();
+    }
+  }, 30000); // a cada 30 segundos, envia um ping para manter vivo
+
+  ws.on("pong", () => {
+    // Cliente respondeu o ping
+    console.log("Pong recebido do cliente");
+  });
 
   ws.on("close", () => {
-    clearInterval(interval);
-    console.log("desconected client");
+    clearInterval(intervalData);
+    clearInterval(intervalPing);
+    console.log("disconnected client");
+  });
+
+  ws.on("error", (error) => {
+    console.error("WebSocket erro:", error);
   });
 });
 
