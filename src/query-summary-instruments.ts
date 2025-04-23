@@ -98,5 +98,10 @@ export async function querySummaryInstruments(ws: WebSocket) {
         };
   });
 
-  ws.send(JSON.stringify(formattedInstruments));
+  ws.send(
+    JSON.stringify({
+      type: "data",
+      payload: formattedInstruments,
+    })
+  );
 }

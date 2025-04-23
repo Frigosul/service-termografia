@@ -5,7 +5,13 @@ import { setSaveData } from "./services/set-saved-data-in-db";
 const wss = new WebSocket.Server({ port: 8080, host: "0.0.0.0" });
 wss.on("connection", (ws) => {
   console.log("Connected client");
-
+  ws.send(
+    JSON.stringify({
+      type: "ping",
+      payload: "Hello! WebSocket is alive!",
+    })
+  );
+  console.log("Mensagem teste enviada imediatamente");
   querySummaryInstruments(ws);
 
   const intervalData = setInterval(() => {
