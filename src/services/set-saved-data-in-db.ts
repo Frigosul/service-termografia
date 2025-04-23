@@ -7,6 +7,7 @@ const prisma = new PrismaClient();
 export async function setSaveData() {
   const instrumentListWithValue = await getInstrumentsWithValues();
   if (!instrumentListWithValue) return;
+
   await Promise.all(
     instrumentListWithValue.map(async (instrument) => {
       const existInstrument = await prisma.instrument.findFirst({
