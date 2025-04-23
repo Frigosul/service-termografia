@@ -28,13 +28,13 @@ model Instrument {
   createdAt      DateTime                 @default(now())
   updatedAt      DateTime                 @default(now())
   displayOrder   Int                      @default(autoincrement())
-  error          String?
+  idSitrad       Int                      @default(0)
+  isActive       Boolean                  @default(true)
   maxValue       Float                    @default(20)
   minValue       Float                    @default(-20)
-  isActive       Boolean                  @default(true)
-  idSitrad       Int                      @default(0)
   model          Int?
   setPoint       Float                    @default(0)
+  error          String?                  @default(dbgenerated("0"))
   differential   Float                    @default(0)
   pressures      InstrumentsPressure[]
   temperatures   InstrumentsTemperature[]
@@ -90,12 +90,12 @@ model InstrumentsPressure {
 
 model UnionInstruments {
   id                   String     @id @default(uuid())
+  name                 String     @unique
   first_instrument_id  String
   second_instrument_id String
+  isActive             Boolean    @default(true)
   createdAt            DateTime   @default(now())
   updatedAt            DateTime   @default(now())
-  name                 String     @unique
-  isActive             Boolean    @default(true)
   firstInstrument      Instrument @relation("FirstInstrumentRelation", fields: [first_instrument_id], references: [id])
   secondInstrument     Instrument @relation("SecondInstrumentRelation", fields: [second_instrument_id], references: [id])
 
