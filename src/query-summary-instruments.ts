@@ -21,7 +21,7 @@ export async function querySummaryInstruments(ws: WebSocket) {
         where: {
           temperature: {
             createdAt: {
-              gte: new Date(Date.now() - 60 * 60 * 4 * 1000),
+              gte: new Date(Date.now() - 60 * 60 * 3 * 1000 - 30000),
             },
           },
         },
@@ -53,7 +53,7 @@ export async function querySummaryInstruments(ws: WebSocket) {
         where: {
           pressure: {
             createdAt: {
-              gte: new Date(Date.now() - 60 * 60 * 4 * 1000),
+              gte: new Date(Date.now() - 60 * 60 * 3 * 1000 - 30000),
             },
           },
         },
@@ -110,6 +110,7 @@ export async function querySummaryInstruments(ws: WebSocket) {
           differential: instrument.differential,
         };
   });
+  console.log(formattedInstruments);
 
   ws.send(
     JSON.stringify({
