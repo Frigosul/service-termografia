@@ -1,4 +1,5 @@
 import WebSocket from "ws";
+import { prisma } from "./lib/prisma";
 import { querySummaryInstruments } from "./query-summary-instruments";
 import { setSaveData } from "./services/set-saved-data-in-db";
 
@@ -26,5 +27,9 @@ wss.on("connection", (ws) => {
 console.log(
   "Service running: temperatures and new instruments saved to PostgreSQL database every 10 seconds."
 );
-
 setInterval(setSaveData, 10000);
+
+process.on("SIGINT", async () => {
+  await prisma.$disconnect();
+  process.exit(0);
+});
