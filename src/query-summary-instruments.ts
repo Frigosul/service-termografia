@@ -18,6 +18,13 @@ export async function querySummaryInstruments(ws: WebSocket) {
       createdAt: true,
       isSensorError: true,
       temperatures: {
+        where: {
+          temperature: {
+            createdAt: {
+              gte: new Date(Date.now() - 60 * 60 * 4 * 1000),
+            },
+          },
+        },
         select: {
           temperature: {
             select: {
@@ -26,6 +33,7 @@ export async function querySummaryInstruments(ws: WebSocket) {
             },
           },
         },
+
         orderBy: {
           temperature: {
             updatedAt: "desc",
@@ -42,6 +50,13 @@ export async function querySummaryInstruments(ws: WebSocket) {
             },
           },
         },
+        where: {
+          pressure: {
+            createdAt: {
+              gte: new Date(Date.now() - 60 * 60 * 4 * 1000),
+            },
+          },
+        },
         orderBy: {
           pressure: {
             updatedAt: "desc",
@@ -52,9 +67,6 @@ export async function querySummaryInstruments(ws: WebSocket) {
     },
     where: {
       isActive: true,
-      createdAt: {
-        equals: new Date(),
-      },
     },
     orderBy: {
       displayOrder: "asc",
@@ -71,9 +83,9 @@ export async function querySummaryInstruments(ws: WebSocket) {
           type: instrument.type,
           status: instrument.status,
           isSensorError: instrument.isSensorError,
-          pressure: instrument.pressures?.[0].pressure?.editValue ?? null,
+          pressure: instrument.pressures?.[0]?.pressure?.editValue ?? null,
           instrumentCreatedAt: instrument.createdAt,
-          createdAt: instrument.temperatures?.[0].temperature.createdAt,
+          createdAt: instrument.temperatures?.[0]?.temperature?.createdAt,
           error: instrument.error,
           maxValue: instrument.maxValue,
           minValue: instrument.minValue,
@@ -90,7 +102,7 @@ export async function querySummaryInstruments(ws: WebSocket) {
           temperature:
             instrument.temperatures?.[0]?.temperature?.editValue ?? null,
           instrumentCreatedAt: instrument.createdAt,
-          createdAt: instrument.temperatures?.[0].temperature.createdAt,
+          createdAt: instrument.temperatures?.[0]?.temperature.createdAt,
           error: instrument.error,
           maxValue: instrument.maxValue,
           minValue: instrument.minValue,
