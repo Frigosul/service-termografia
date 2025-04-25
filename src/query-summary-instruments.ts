@@ -1,7 +1,5 @@
-import { PrismaClient } from "@prisma/client";
 import WebSocket from "ws";
-
-const prisma = new PrismaClient();
+import { prisma } from "./lib/prisma";
 
 export async function querySummaryInstruments(ws: WebSocket) {
   const instruments = await prisma.instrument.findMany({
