@@ -110,7 +110,6 @@ export async function querySummaryInstruments(ws: WebSocket) {
           differential: instrument.differential,
         };
   });
-  console.log(formattedInstruments);
 
   ws.send(
     JSON.stringify({
