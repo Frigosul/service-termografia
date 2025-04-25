@@ -1,8 +1,6 @@
-import { PrismaClient } from "@prisma/client";
 import dayjs from "dayjs";
+import { prisma } from "../lib/prisma";
 import { getInstrumentsWithValues } from "./get-instruments-with-value";
-
-const prisma = new PrismaClient();
 
 export async function setSaveData() {
   const instrumentListWithValue = await getInstrumentsWithValues();
