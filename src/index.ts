@@ -4,13 +4,26 @@ import { querySummaryInstruments } from "./query-summary-instruments";
 import { setSaveData } from "./services/set-saved-data-in-db";
 
 const wss = new WebSocket.Server({ port: 8080, host: "0.0.0.0" });
+const lastSent = new Map<WebSocket, number>();
+
+// cache of ip client
+function shouldQuery(ws: WebSocket): boolean {
+  const now = Date.now();
+  const last = lastSent.get(ws) ?? 0;
+  if (now - last < 10000) return false;
+  lastSent.set(ws, now);
+  return true;
+}
+
 wss.on("connection", (ws) => {
   console.log("Connected client");
 
-  querySummaryInstruments(ws);
+  if (shouldQuery(ws)) {
+    querySummaryInstruments(ws);
+  }
 
   const intervalData = setInterval(() => {
-    if (ws.readyState === WebSocket.OPEN) {
+    if (ws.readyState === WebSocket.OPEN && shouldQuery(ws)) {
       querySummaryInstruments(ws);
     }
   }, 10000); // 10 segundos
