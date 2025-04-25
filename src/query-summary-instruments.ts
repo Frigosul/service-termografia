@@ -52,6 +52,7 @@ export async function querySummaryInstruments(ws: WebSocket) {
     },
     where: {
       isActive: true,
+      createdAt: new Date(),
     },
     orderBy: {
       displayOrder: "asc",
