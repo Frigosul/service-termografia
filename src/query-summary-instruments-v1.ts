@@ -1,8 +1,14 @@
 import dayjs from "dayjs";
 import { prisma } from "./lib/prisma";
 
-export async function querySummaryInstruments() {
+export async function querySummaryInstrumentsV1() {
   const instruments = await prisma.instrument.findMany({
+    where: {
+      isActive: true,
+    },
+    orderBy: {
+      displayOrder: "asc",
+    },
     select: {
       id: true,
       idSitrad: true,
@@ -17,63 +23,72 @@ export async function querySummaryInstruments() {
       differential: true,
       createdAt: true,
       isSensorError: true,
-      temperatures: {
-        where: {
-          temperature: {
-            createdAt: {
-              gte: dayjs().subtract(10, "second").toDate(),
-            },
-          },
-        },
-        select: {
-          temperature: {
-            select: {
-              editValue: true,
-              createdAt: true,
-            },
-          },
-        },
-
-        orderBy: {
-          temperature: {
-            updatedAt: "desc",
-          },
-        },
-        take: 1,
-      },
-      pressures: {
-        select: {
-          pressure: {
-            select: {
-              editValue: true,
-              createdAt: true,
-            },
-          },
-        },
-        where: {
-          pressure: {
-            createdAt: {
-              gte: dayjs().subtract(10, "second").toDate(),
-            },
-          },
-        },
-        orderBy: {
-          pressure: {
-            updatedAt: "desc",
-          },
-        },
-        take: 1,
-      },
-    },
-    where: {
-      isActive: true,
-    },
-    orderBy: {
-      displayOrder: "asc",
     },
   });
+  const instrumentsIds = instruments.map((instrument) => instrument.id);
+
+  const [temperatures, pressures] = await Promise.all([
+    prisma.instrumentsTemperature.findMany({
+      where: {
+        instrument_id: { in: instrumentsIds },
+        temperature: {
+          createdAt: {
+            gte: dayjs().subtract(10, "second").toDate(),
+          },
+        },
+      },
+      select: {
+        instrument_id: true,
+        temperature: {
+          select: {
+            editValue: true,
+            createdAt: true,
+          },
+        },
+      },
+      orderBy: {
+        temperature: {
+          createdAt: "desc",
+        },
+      },
+    }),
+    prisma.instrumentsPressure.findMany({
+      where: {
+        instrument_id: { in: instrumentsIds },
+        pressure: {
+          createdAt: {
+            gte: dayjs().subtract(10, "second").toDate(),
+          },
+        },
+      },
+      select: {
+        instrument_id: true,
+        pressure: {
+          select: {
+            editValue: true,
+            createdAt: true,
+          },
+        },
+      },
+      orderBy: {
+        pressure: {
+          createdAt: "desc",
+        },
+      },
+    }),
+  ]);
+
+  const temperatureMap = new Map(
+    temperatures.map((t) => [t.instrument_id, t.temperature])
+  );
+  const pressureMap = new Map(
+    pressures.map((p) => [p.instrument_id, p.pressure])
+  );
 
   const formattedInstruments = instruments.map((instrument) => {
+    const temperatureData = temperatureMap.get(instrument.id);
+    const pressureData = pressureMap.get(instrument.id);
+
     return instrument.type === "press"
       ? {
           id: instrument.id,
@@ -83,9 +98,9 @@ export async function querySummaryInstruments() {
           type: instrument.type,
           status: instrument.status,
           isSensorError: instrument.isSensorError,
-          pressure: instrument.pressures?.[0]?.pressure?.editValue ?? null,
+          pressure: pressureData?.editValue ?? null,
           instrumentCreatedAt: instrument.createdAt,
-          createdAt: instrument.temperatures?.[0]?.temperature?.createdAt,
+          createdAt: pressureData?.createdAt ?? null,
           error: instrument.error,
           maxValue: instrument.maxValue,
           minValue: instrument.minValue,
@@ -99,10 +114,9 @@ export async function querySummaryInstruments() {
           type: instrument.type,
           status: instrument.status,
           isSensorError: instrument.isSensorError,
-          temperature:
-            instrument.temperatures?.[0]?.temperature?.editValue ?? null,
+          temperature: temperatureData?.editValue ?? null,
           instrumentCreatedAt: instrument.createdAt,
-          createdAt: instrument.temperatures?.[0]?.temperature.createdAt,
+          createdAt: temperatureData?.createdAt ?? null,
           error: instrument.error,
           maxValue: instrument.maxValue,
           minValue: instrument.minValue,
@@ -110,6 +124,5 @@ export async function querySummaryInstruments() {
           differential: instrument.differential,
         };
   });
-
   return formattedInstruments;
 }

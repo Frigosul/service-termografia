@@ -1,6 +1,6 @@
 import WebSocket, { WebSocketServer } from "ws";
 import { prisma } from "./lib/prisma";
-import { querySummaryInstruments } from "./query-summary-instruments";
+import { querySummaryInstrumentsV1 } from "./query-summary-instruments-v1";
 import { setSaveData } from "./services/set-saved-data-in-db";
 
 interface WebSocketServerWithBroadcast extends WebSocketServer {
@@ -27,10 +27,8 @@ function broadcast(data: any) {
   });
 }
 
-// Atribui a função broadcast ao servidor
 wss.broadcast = broadcast;
 
-// Evento de nova conexão
 wss.on("connection", (ws) => {
   console.log("Connected client");
 
@@ -46,7 +44,7 @@ wss.on("connection", (ws) => {
 // A cada 10 segundos, faz a consulta e envia para todos conectados
 setInterval(async () => {
   try {
-    const result = await querySummaryInstruments();
+    const result = await querySummaryInstrumentsV1();
     wss.broadcast(result);
   } catch (err) {
     console.error("Erro ao consultar instrumentos:", (err as Error).message);
