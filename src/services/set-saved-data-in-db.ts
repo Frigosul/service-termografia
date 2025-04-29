@@ -16,137 +16,121 @@ const instrumentInclude = {
     take: 1,
   },
 } satisfies Prisma.InstrumentInclude;
-
 type InstrumentWithValues = Prisma.InstrumentGetPayload<{
   include: typeof instrumentInclude;
 }>;
+
+const now = dayjs().toDate();
 
 export async function setSaveData() {
   try {
     const instrumentsWithValue = await getInstrumentsWithValues();
     if (!instrumentsWithValue) return;
-    const now = dayjs().toDate();
 
-    const updatedInstruments = await Promise.all(
-      instrumentsWithValue.map(
-        async (instrument): Promise<ReturnType<typeof formatInstrument>> => {
-          const existingInstrument = await prisma.instrument.findFirst({
-            where: { name: instrument.name },
-          });
+    const operations = instrumentsWithValue.map((instrument) => {
+      const isPress = instrument.modelId === 67;
+      const temperatureValue =
+        instrument.modelId === 72 ? instrument.Sensor1 : instrument.Temperature;
 
-          const isPress = instrument.modelId === 67;
-          const temperatureValue =
-            instrument.modelId === 72
-              ? instrument.Sensor1
-              : instrument.Temperature;
-
-          if (instrument.error || !instrument.modelId) {
-            const fallbackData = {
-              name: instrument.name,
-              status: "",
-              error: instrument.error,
-              temperatures: {
+      if (instrument.error || !instrument.modelId) {
+        const fallbackData = {
+          name: instrument.name,
+          status: "",
+          error: instrument.error,
+          type: "temp",
+          updatedAt: now,
+          temperatures: {
+            create: {
+              temperature: {
                 create: {
-                  temperature: {
+                  value: 0,
+                  editValue: 0,
+                  createdAt: now,
+                  updatedAt: now,
+                },
+              },
+            },
+          },
+        };
+
+        return prisma.instrument.upsert({
+          where: { name: instrument.name },
+          update: fallbackData,
+          create: fallbackData,
+          include: instrumentInclude,
+        });
+      }
+
+      const status = Array.from(
+        new Set([
+          instrument.IsOpenDoor && "port",
+          instrument.IsDefrost && "deg",
+          instrument.IsRefrigeration && "resf",
+          instrument.IsOutputFan && "vent",
+          instrument.IsOutputDefr1 && "deg",
+          instrument.IsOutputRefr && "resf",
+        ])
+      )
+        .filter(Boolean)
+        .join(",");
+
+      const data = {
+        idSitrad: instrument.id,
+        name: instrument.name,
+        model: instrument.modelId,
+        status,
+        type: isPress ? "press" : "temp",
+        updatedAt: now,
+        error: null,
+        isSensorError: isPress
+          ? instrument.IsErrorPressureSensor
+          : instrument.modelId === 72
+            ? instrument.IsErrorS1
+            : instrument.IsSensorError,
+        setPoint: instrument.CurrentSetpoint ?? instrument.FncSetpoint,
+        differential: instrument.FncDifferential,
+        ...(isPress
+          ? {
+              pressures: {
+                create: {
+                  pressure: {
                     create: {
-                      value: 0,
-                      editValue: 0,
+                      value: instrument.GasPressure,
+                      editValue: instrument.GasPressure,
                       createdAt: now,
                       updatedAt: now,
                     },
                   },
                 },
               },
-            };
-
-            const saved = existingInstrument
-              ? await prisma.instrument.update({
-                  where: { id: existingInstrument.id },
-                  data: { ...fallbackData, type: existingInstrument.type },
-                  include: instrumentInclude,
-                })
-              : await prisma.instrument.create({
-                  data: fallbackData,
-                  include: instrumentInclude,
-                });
-
-            return formatInstrument(saved);
-          }
-
-          const status = Array.from(
-            new Set([
-              instrument.IsOpenDoor && "port",
-              instrument.IsDefrost && "deg",
-              instrument.IsRefrigeration && "resf",
-              instrument.IsOutputFan && "vent",
-              instrument.IsOutputDefr1 && "deg",
-              instrument.IsOutputRefr && "resf",
-            ])
-          )
-            .filter(Boolean)
-            .join(",");
-
-          const data = {
-            idSitrad: instrument.id,
-            name: instrument.name,
-            model: instrument.modelId,
-            status,
-            type: isPress ? "press" : "temp",
-            updatedAt: now,
-            error: null,
-            isSensorError: isPress
-              ? instrument.IsErrorPressureSensor
-              : instrument.modelId === 72
-                ? instrument.IsErrorS1
-                : instrument.IsSensorError,
-            setPoint: instrument.CurrentSetpoint ?? instrument.FncSetpoint,
-            differential: instrument.FncDifferential,
-            ...(isPress
-              ? {
-                  pressures: {
+            }
+          : {
+              temperatures: {
+                create: {
+                  temperature: {
                     create: {
-                      pressure: {
-                        create: {
-                          value: instrument.GasPressure,
-                          editValue: instrument.GasPressure,
-                          createdAt: now,
-                          updatedAt: now,
-                        },
-                      },
+                      value: temperatureValue,
+                      editValue: temperatureValue,
+                      createdAt: now,
+                      updatedAt: now,
                     },
                   },
-                }
-              : {
-                  temperatures: {
-                    create: {
-                      temperature: {
-                        create: {
-                          value: temperatureValue,
-                          editValue: temperatureValue,
-                          createdAt: now,
-                          updatedAt: now,
-                        },
-                      },
-                    },
-                  },
-                }),
-          };
+                },
+              },
+            }),
+      };
 
-          const saved = existingInstrument
-            ? await prisma.instrument.update({
-                where: { id: existingInstrument.id },
-                data,
-                include: instrumentInclude,
-              })
-            : await prisma.instrument.create({
-                data,
-                include: instrumentInclude,
-              });
+      return prisma.instrument.upsert({
+        where: { name: instrument.name },
+        update: data,
+        create: data,
+        include: instrumentInclude,
+      });
+    });
 
-          return formatInstrument(saved);
-        }
-      )
-    );
+    const results = await prisma.$transaction(operations);
+
+    const updatedInstruments = results.map(formatInstrument);
 
     await redis.set(
       String(process.env.METADATA_CACHE_KEY),

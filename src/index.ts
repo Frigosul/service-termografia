@@ -11,12 +11,6 @@ const wss = new WebSocket.Server({
   port: 8080,
   host: "0.0.0.0",
 }) as WebSocketServerWithBroadcast;
-
-async function getInstruments() {
-  const instruments = await redis.get(String(process.env.METADATA_CACHE_KEY));
-  return JSON.parse(String(instruments));
-}
-
 function broadcast(data: any) {
   wss.clients.forEach((client) => {
     if (client.readyState === WebSocket.OPEN) {
@@ -30,6 +24,11 @@ function broadcast(data: any) {
   });
 }
 wss.broadcast = broadcast;
+
+async function getInstruments() {
+  const instruments = await redis.get(String(process.env.METADATA_CACHE_KEY));
+  return JSON.parse(String(instruments));
+}
 
 // 🚀 Executa imediatamente ao subir o servidor
 (async () => {
