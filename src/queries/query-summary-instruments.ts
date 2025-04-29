@@ -1,5 +1,5 @@
 import dayjs from "dayjs";
-import { prisma } from "./lib/prisma";
+import { prisma } from "../lib/prisma";
 
 export async function querySummaryInstruments() {
   const instruments = await prisma.instrument.findMany({

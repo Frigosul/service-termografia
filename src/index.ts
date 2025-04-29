@@ -1,19 +1,22 @@
 import WebSocket, { WebSocketServer } from "ws";
 import { prisma } from "./lib/prisma";
-import { querySummaryInstrumentsV1 } from "./query-summary-instruments-v1";
+import { redis } from "./lib/redis";
 import { setSaveData } from "./services/set-saved-data-in-db";
 
 interface WebSocketServerWithBroadcast extends WebSocketServer {
   broadcast: (data: any) => void;
 }
 
-// Cria o servidor WebSocket
 const wss = new WebSocket.Server({
   port: 8080,
   host: "0.0.0.0",
 }) as WebSocketServerWithBroadcast;
 
-// Função para enviar dados para todos os clientes conectados
+async function getInstruments() {
+  const instruments = await redis.get(String(process.env.METADATA_CACHE_KEY));
+  return JSON.parse(String(instruments));
+}
+
 function broadcast(data: any) {
   wss.clients.forEach((client) => {
     if (client.readyState === WebSocket.OPEN) {
@@ -26,33 +29,28 @@ function broadcast(data: any) {
     }
   });
 }
-
 wss.broadcast = broadcast;
 
-wss.on("connection", (ws) => {
-  console.log("Connected client");
+// 🚀 Executa imediatamente ao subir o servidor
+(async () => {
+  try {
+    await setSaveData();
+    const instruments = await getInstruments();
+    wss.broadcast(instruments);
+  } catch (err) {
+    console.error("Erro na execução inicial:", (err as Error).message);
+  }
+})();
 
-  ws.on("close", () => {
-    console.log("Disconnected client");
-  });
-
-  ws.on("error", (err) => {
-    console.error("Erro no WebSocket:", err.message);
-  });
-});
-
-// A cada 10 segundos, faz a consulta e envia para todos conectados
 setInterval(async () => {
   try {
-    const result = await querySummaryInstrumentsV1();
-    wss.broadcast(result);
+    setSaveData();
+    const instruments = await getInstruments();
+    wss.broadcast(instruments);
   } catch (err) {
-    console.error("Erro ao consultar instrumentos:", (err as Error).message);
+    console.error("Error list instruments", (err as Error).message);
   }
 }, 10000);
-
-// A cada 10 segundos, salva os dados no banco
-setInterval(setSaveData, 10000);
 
 // Finaliza a conexão com o banco ao encerrar o processo
 process.on("SIGINT", async () => {
