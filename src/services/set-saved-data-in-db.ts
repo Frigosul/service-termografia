@@ -84,7 +84,9 @@ export async function setSaveData() {
           instrument.ProcessStatusText ??
           (instrument.ProcessStatus === 7
             ? "Refrigeração"
-            : instrument.ProcessStatus?.toString()),
+            : instrument.ProcessStatus === 1
+              ? "Online"
+              : instrument.ProcessStatus?.toString()),
         updatedAt: now,
         error: null,
         isSensorError: isPress
