@@ -80,6 +80,11 @@ export async function setSaveData() {
         model: instrument.modelId,
         status,
         type: isPress ? "press" : "temp",
+        process:
+          instrument.ProcessStatusText ??
+          (instrument.ProcessStatus === 7
+            ? "Refrigeração"
+            : instrument.ProcessStatus?.toString()),
         updatedAt: now,
         error: null,
         isSensorError: isPress
@@ -154,6 +159,7 @@ function formatInstrument(saved: InstrumentWithValues) {
         name: saved.name,
         model: saved.model,
         type: "press",
+        process: saved.process,
         status: saved.status,
         isSensorError: saved.isSensorError,
         pressure: pressureData?.editValue ?? null,
@@ -170,6 +176,7 @@ function formatInstrument(saved: InstrumentWithValues) {
         name: saved.name,
         model: saved.model,
         type: "temp",
+        process: saved.process,
         status: saved.status,
         isSensorError: saved.isSensorError,
         temperature: temperatureData?.editValue ?? null,

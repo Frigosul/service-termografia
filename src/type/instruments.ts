@@ -35,7 +35,7 @@ export interface IInstrument {
   enableInvertStatusCommand: boolean;
   enableProcessStatusTime: boolean;
   temperatureUnityType: number;
-  processStatus: number;
+
   setpointRelativeTemp: number;
   IsDataloggerCorrupted: boolean;
   IsManualDatalogger: boolean;
@@ -48,6 +48,8 @@ export interface IInstrument {
   remainingInhibitionTime: number | null;
   Sensor1: number;
   Sensor2: number;
+  ProcessStatusText?: string | null;
+  ProcessStatus?: string | number;
 }
 export interface IInstruments {
   results: IInstrument[];

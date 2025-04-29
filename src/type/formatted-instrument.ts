@@ -5,6 +5,7 @@ type BaseInstrument = {
   model: number | null;
   type: "press" | "temp" | null;
   status: string;
+  process: string | null;
   isSensorError: boolean;
   createdAt: Date;
   error: string | null;
