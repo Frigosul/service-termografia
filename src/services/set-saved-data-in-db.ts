@@ -86,7 +86,9 @@ export async function setSaveData() {
             ? "Refrigeração"
             : instrument.ProcessStatus === 1
               ? "Online"
-              : instrument.ProcessStatus?.toString()),
+              : instrument.ProcessStatus === 8
+                ? "Degelo"
+                : instrument.ProcessStatus?.toString()),
         updatedAt: now,
         error: null,
         isSensorError: isPress
@@ -137,7 +139,9 @@ export async function setSaveData() {
 
     const results = await prisma.$transaction(operations);
 
-    const updatedInstruments = results.map(formatInstrument);
+    const updatedInstruments = results
+      .map(formatInstrument)
+      .sort((a, b) => a.displayOrder - b.displayOrder);
 
     await redis.set(
       String(process.env.METADATA_CACHE_KEY),
@@ -160,6 +164,7 @@ function formatInstrument(saved: InstrumentWithValues) {
         idSitrad: saved.idSitrad,
         name: saved.name,
         model: saved.model,
+        displayOrder: saved.displayOrder,
         type: "press",
         process: saved.process,
         status: saved.status,
@@ -177,6 +182,7 @@ function formatInstrument(saved: InstrumentWithValues) {
         idSitrad: saved.idSitrad,
         name: saved.name,
         model: saved.model,
+        displayOrder: saved.displayOrder,
         type: "temp",
         process: saved.process,
         status: saved.status,
