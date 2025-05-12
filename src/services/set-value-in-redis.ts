@@ -1,64 +1,65 @@
-import { Prisma } from "@prisma/client";
-import dayjs from "dayjs";
-import { prisma } from "../lib/prisma";
 import { redis } from "../lib/redis";
 import { getInstrumentsWithValues } from "./get-instruments-with-value";
 
-const instrumentInclude = {
-  temperatures: {
-    include: { temperature: true },
-    orderBy: { temperature: { createdAt: "desc" } },
-    take: 1,
-  },
-  pressures: {
-    include: { pressure: true },
-    orderBy: { pressure: { createdAt: "desc" } },
-    take: 1,
-  },
-} satisfies Prisma.InstrumentInclude;
-type InstrumentWithValues = Prisma.InstrumentGetPayload<{
-  include: typeof instrumentInclude;
-}>;
+export async function setValueInRedis() {
+  const instrumentsWithValue = await getInstrumentsWithValues();
+  if (!instrumentsWithValue) return;
 
-const now = dayjs().toDate();
-
-export async function setSaveData() {
   try {
-    const instrumentsWithValue = await getInstrumentsWithValues();
-    if (!instrumentsWithValue) return;
+    const existingCacheRaw = await redis.get(
+      String(process.env.METADATA_CACHE_KEY)
+    );
+    const existingCache = existingCacheRaw ? JSON.parse(existingCacheRaw) : [];
 
-    const operations = instrumentsWithValue.map((instrument) => {
+    const instrumentsData = instrumentsWithValue.map((instrument) => {
       const isPress = instrument.modelId === 67;
       const temperatureValue =
         instrument.modelId === 72 ? instrument.Sensor1 : instrument.Temperature;
 
       if (instrument.error || !instrument.modelId) {
-        const fallbackData = {
+        return {
+          idSitrad: instrument.id,
           name: instrument.name,
+          model: instrument.modelId,
           status: "",
           error: instrument.error,
-          type: "temp",
-          updatedAt: now,
-          temperatures: {
-            create: {
-              temperature: {
-                create: {
-                  value: 0,
-                  editValue: 0,
-                  createdAt: now,
-                  updatedAt: now,
-                },
-              },
-            },
-          },
+          type: isPress ? "press" : "temp",
+          process:
+            instrument.ProcessStatusText ??
+            (instrument.ProcessStatus === 7
+              ? "Refrigeração"
+              : instrument.ProcessStatus === 1
+                ? "Online"
+                : instrument.ProcessStatus === 8
+                  ? "Degelo"
+                  : instrument.ProcessStatus?.toString()),
+          isSensorError: isPress
+            ? instrument.IsErrorPressureSensor
+            : instrument.modelId === 72
+              ? instrument.IsErrorS1
+              : instrument.IsSensorError,
+          setPoint: instrument.CurrentSetpoint ?? instrument.FncSetpoint,
+          differential: instrument.FncDifferential,
+          ...(isPress
+            ? {
+                pressures: [
+                  {
+                    pressure: {
+                      editValue: instrument.GasPressure,
+                    },
+                  },
+                ],
+              }
+            : {
+                temperatures: [
+                  {
+                    temperature: {
+                      editValue: temperatureValue,
+                    },
+                  },
+                ],
+              }),
         };
-
-        return prisma.instrument.upsert({
-          where: { name: instrument.name },
-          update: fallbackData,
-          create: fallbackData,
-          include: instrumentInclude,
-        });
       }
 
       const status = Array.from(
@@ -74,7 +75,7 @@ export async function setSaveData() {
         .filter(Boolean)
         .join(",");
 
-      const data = {
+      return {
         idSitrad: instrument.id,
         name: instrument.name,
         model: instrument.modelId,
@@ -89,8 +90,6 @@ export async function setSaveData() {
               : instrument.ProcessStatus === 8
                 ? "Degelo"
                 : instrument.ProcessStatus?.toString()),
-        updatedAt: now,
-        error: null,
         isSensorError: isPress
           ? instrument.IsErrorPressureSensor
           : instrument.modelId === 72
@@ -100,51 +99,38 @@ export async function setSaveData() {
         differential: instrument.FncDifferential,
         ...(isPress
           ? {
-              pressures: {
-                create: {
+              pressures: [
+                {
                   pressure: {
-                    create: {
-                      value: instrument.GasPressure,
-                      editValue: instrument.GasPressure,
-                      createdAt: now,
-                      updatedAt: now,
-                    },
+                    editValue: instrument.GasPressure,
                   },
                 },
-              },
+              ],
             }
           : {
-              temperatures: {
-                create: {
+              temperatures: [
+                {
                   temperature: {
-                    create: {
-                      value: temperatureValue,
-                      editValue: temperatureValue,
-                      createdAt: now,
-                      updatedAt: now,
-                    },
+                    editValue: temperatureValue,
                   },
                 },
-              },
+              ],
             }),
       };
-
-      return prisma.instrument.upsert({
-        where: { name: instrument.name },
-        update: data,
-        create: data,
-        include: instrumentInclude,
-      });
     });
 
-    const results = await prisma.$transaction(operations);
+    const mergedInstruments = mergeInstrumentData(
+      existingCache,
+      instrumentsData
+    );
 
-    const updatedInstruments = results
+    const formattedToSave = mergedInstruments
       .map(formatInstrument)
       .sort((a, b) => a.displayOrder - b.displayOrder);
+
     await redis.set(
       String(process.env.METADATA_CACHE_KEY),
-      JSON.stringify(updatedInstruments),
+      JSON.stringify(formattedToSave),
       "EX",
       15
     );
@@ -153,7 +139,22 @@ export async function setSaveData() {
   }
 }
 
-function formatInstrument(saved: InstrumentWithValues) {
+function mergeInstrumentData(existing: any[], updates: any[]) {
+  const existingMap = new Map(existing.map((i) => [i.idSitrad, i]));
+  const merged: any[] = [];
+
+  for (const update of updates) {
+    const existingEntry = existingMap.get(update.idSitrad) || {};
+    merged.push({
+      ...existingEntry,
+      ...update,
+    });
+  }
+
+  return merged;
+}
+
+function formatInstrument(saved: any) {
   const temperatureData = saved.temperatures?.[0]?.temperature ?? null;
   const pressureData = saved.pressures?.[0]?.pressure ?? null;
 

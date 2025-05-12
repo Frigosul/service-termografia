@@ -1,7 +1,7 @@
 import WebSocket, { WebSocketServer } from "ws";
-import { prisma } from "./lib/prisma";
 import { redis } from "./lib/redis";
 import { setSaveData } from "./services/set-saved-data-in-db";
+import { setValueInRedis } from "./services/set-value-in-redis";
 
 interface WebSocketServerWithBroadcast extends WebSocketServer {
   broadcast: (data: any) => void;
@@ -43,20 +43,20 @@ async function getInstruments() {
 
 setInterval(async () => {
   try {
-    setSaveData();
+    await setValueInRedis();
     const instruments = await getInstruments();
     wss.broadcast(instruments);
   } catch (err) {
     console.error("Error list instruments", (err as Error).message);
   }
-}, 10000);
+}, 5000); // 5 seconds
 
-// Finaliza a conexão com o banco ao encerrar o processo
-process.on("SIGINT", async () => {
-  await prisma.$disconnect();
-  process.exit(0);
-});
+setInterval(async () => {
+  try {
+    await setSaveData();
+  } catch (err) {
+    console.error("Error saved instruments", (err as Error).message);
+  }
+}, 1000 * 60); // 1 minute
 
-console.log(
-  "Service running: temperatures and new instruments saved to PostgreSQL database every 10 seconds."
-);
+console.log("Server WebSocket running on port 8080 🚀");
