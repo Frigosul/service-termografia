@@ -1,0 +1,23 @@
+name: Deploy vm-term
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+
+    steps:
+      - name: Checar código
+        uses: actions/checkout@v3
+
+      - name: Deploy to local server 
+        run: |
+          ssh joao@192.168.4.40 << 'EOF'
+            cd /home/joao/service-termografia
+            git pull
+            pnpm install
+            pm2 restart termo-service
+          EOF
