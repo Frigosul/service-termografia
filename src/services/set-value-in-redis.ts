@@ -123,8 +123,11 @@ export async function setValueInRedis() {
       existingCache,
       instrumentsData
     );
+    const mergedInstrumentsWithoutDuplicates = removeDuplicatesByName(
+      mergedInstruments
+    );
 
-    const formattedToSave = mergedInstruments
+    const formattedToSave = mergedInstrumentsWithoutDuplicates
       .map(formatInstrument)
       .sort((a, b) => a.displayOrder - b.displayOrder);
 
@@ -140,11 +143,11 @@ export async function setValueInRedis() {
 }
 
 function mergeInstrumentData(existing: any[], updates: any[]) {
-  const existingMap = new Map(existing.map((i) => [i.idSitrad, i]));
+  const existingMap = new Map(existing.map((i) => [i.name, i]));
   const merged: any[] = [];
 
   for (const update of updates) {
-    const existingEntry = existingMap.get(update.idSitrad) || {};
+    const existingEntry = existingMap.get(update.name) || {};
     merged.push({
       ...existingEntry,
       ...update,
@@ -152,6 +155,14 @@ function mergeInstrumentData(existing: any[], updates: any[]) {
   }
 
   return merged;
+}
+
+function removeDuplicatesByName(instruments: any[]) {
+  const map = new Map<string, any>();
+  for (const inst of instruments) {
+    map.set(inst.name, inst);
+  }
+  return Array.from(map.values());
 }
 
 function formatInstrument(saved: any) {

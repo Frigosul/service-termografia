@@ -11,8 +11,9 @@ const wss = new WebSocket.Server({
   port: 8080,
   host: "0.0.0.0",
 }) as WebSocketServerWithBroadcast;
-function broadcast(data: any) {
-  wss.clients.forEach((client) => {
+
+wss.broadcast = function (data: any) {
+  this.clients.forEach((client) => {
     if (client.readyState === WebSocket.OPEN) {
       client.send(
         JSON.stringify({
@@ -22,43 +23,65 @@ function broadcast(data: any) {
       );
     }
   });
-}
-wss.broadcast = broadcast;
+};
 
 async function getInstruments() {
-  const instruments = await redis.get(String(process.env.METADATA_CACHE_KEY));
-  return JSON.parse(String(instruments));
+  try {
+    const instruments = await redis.get(String(process.env.METADATA_CACHE_KEY));
+    if (!instruments) {
+      console.warn("Nenhum instrumento encontrado no Redis");
+      return null;
+    }
+    return JSON.parse(instruments);
+  } catch (error) {
+    console.error("Erro ao buscar instrumentos do Redis:", error);
+    return null;
+  }
 }
 
-// 🚀 Executa imediatamente ao subir o servidor
+async function runSetValueInRedisLoop(intervalMs: number) {
+  while (true) {
+    try {
+      await setValueInRedis();
+      const instruments = await getInstruments();
+      if (instruments) {
+        wss.broadcast(instruments);
+      }
+    } catch (err) {
+      console.error("Erro na atualização do Redis e broadcast:", (err as Error).message);
+    }
+    await new Promise((res) => setTimeout(res, intervalMs));
+  }
+}
+
+async function runSetSaveDataLoop(intervalMs: number) {
+  while (true) {
+    try {
+      await setSaveData();
+    } catch (err) {
+      console.error("Erro ao salvar dados no Postgres:", (err as Error).message);
+    }
+    await new Promise((res) => setTimeout(res, intervalMs));
+  }
+}
+
 (async () => {
   try {
     await setSaveData();
+
     const instruments = await getInstruments();
-    wss.broadcast(instruments);
+       if (instruments) {
+      wss.broadcast(instruments);
+    } else {
+      console.warn("Inicialização: instrumentos vazios ou nulos.");
+    }
 
-    setInterval(async () => {
-      try {
-        await setValueInRedis();
-        const instruments = await getInstruments();
-        wss.broadcast(instruments);
-      } catch (err) {
-        console.error("Error list instruments", (err as Error).message);
-      }
-    }, 5000); // 5 seconds
+    runSetValueInRedisLoop(5000);
+    runSetSaveDataLoop(60000);
 
+    console.log("Server WebSocket running on port 8080 🚀");
   } catch (err) {
     console.error("Erro na execução inicial:", (err as Error).message);
+    process.exit(1); // encerra o processo se não iniciar corretamente
   }
 })();
-
-
-setInterval(async () => {
-  try {
-    await setSaveData();
-  } catch (err) {
-    console.error("Error saved instruments", (err as Error).message);
-  }
-}, 1000 * 60); // 1 minute
-
-console.log("Server WebSocket running on port 8080 🚀");
