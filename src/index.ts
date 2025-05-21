@@ -36,20 +36,22 @@ async function getInstruments() {
     await setSaveData();
     const instruments = await getInstruments();
     wss.broadcast(instruments);
+
+    setInterval(async () => {
+      try {
+        await setValueInRedis();
+        const instruments = await getInstruments();
+        wss.broadcast(instruments);
+      } catch (err) {
+        console.error("Error list instruments", (err as Error).message);
+      }
+    }, 5000); // 5 seconds
+
   } catch (err) {
     console.error("Erro na execução inicial:", (err as Error).message);
   }
 })();
 
-setInterval(async () => {
-  try {
-    await setValueInRedis();
-    const instruments = await getInstruments();
-    wss.broadcast(instruments);
-  } catch (err) {
-    console.error("Error list instruments", (err as Error).message);
-  }
-}, 5000); // 5 seconds
 
 setInterval(async () => {
   try {
