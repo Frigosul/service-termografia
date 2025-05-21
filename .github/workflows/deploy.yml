@@ -1,4 +1,4 @@
-name: Deploy vm-term
+name: Deploy vm-linux
 
 on:
   push:
@@ -13,11 +13,19 @@ jobs:
       - name: Checar código
         uses: actions/checkout@v3
 
-      - name: Deploy to local server 
+      - name: Configurar ssh-agent com chave privada
+        uses: webfactory/ssh-agent@v0.7.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Fazer deploy na rede local
         run: |
-          ssh joao@192.168.4.40 << 'EOF'
-            cd /home/joao/service-termografia
-            git pull
-            pnpm install
-            pm2 restart termo-service
+          ssh joao@192.168.4.40 <<'EOF'
+          echo "INICIANDO DEPLOY"
+          cd /home/joao/service-termografia
+          git pull
+          pnpm install --frozen-lockfile --reporter=append-only
+          pm2 restart termo-service
+          echo "DEPLOY CONCLUÍDO"
           EOF
+
