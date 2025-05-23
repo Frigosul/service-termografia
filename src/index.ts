@@ -53,21 +53,13 @@ async function runSetValueInRedisLoop(intervalMs: number) {
     await new Promise((res) => setTimeout(res, intervalMs));
   }
 }
-let isRunningSaveData = false;
+
 async function runSetSaveDataLoop(intervalMs: number) {
  setInterval(async () => {
-    if (isRunningSaveData) {
-      console.warn("Execução anterior ainda em andamento, pulando...");
-      return;
-    }
-
-    isRunningSaveData = true;
-    try {
+     try {
       await setSaveData();
     } catch (err) {
       console.error("Erro ao salvar dados no Postgres:", (err as Error).message);
-    } finally {
-      isRunningSaveData = false;
     }
   }, intervalMs);
 }

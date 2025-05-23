@@ -126,8 +126,12 @@ export async function setValueInRedis() {
     const mergedInstrumentsWithoutDuplicates = removeDuplicatesByName(
       mergedInstruments
     );
+    const mergedInstrumentsWithApiSitrad = removeWithoutInstrumentsNameInApiSitrad(
+      mergedInstrumentsWithoutDuplicates,
+      instrumentsWithValue
+    );
 
-    const formattedToSave = mergedInstrumentsWithoutDuplicates
+    const formattedToSave = mergedInstrumentsWithApiSitrad
       .map(formatInstrument)
       .sort((a, b) => a.displayOrder - b.displayOrder);
 
@@ -163,6 +167,10 @@ function removeDuplicatesByName(instruments: any[]) {
     map.set(inst.name, inst);
   }
   return Array.from(map.values());
+}
+function removeWithoutInstrumentsNameInApiSitrad(instruments: any[], instrumentsWithValue: any[]) {
+   const instrumentsNameInApi = instrumentsWithValue.map((instrument) => instrument.name);
+return instruments.filter((instrument) => instrumentsNameInApi.includes(instrument.name));
 }
 
 function formatInstrument(saved: any) {

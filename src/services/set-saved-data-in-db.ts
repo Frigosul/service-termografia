@@ -159,7 +159,6 @@ export async function setSaveData() {
     15
   );
 
-  console.log("Dados salvos com sucesso");
 } catch (error) {
   console.error("Erro ao salvar dados e atualizar cache:", error);
 }
