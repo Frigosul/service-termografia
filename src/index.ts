@@ -58,6 +58,7 @@ async function runSetSaveDataLoop(intervalMs: number) {
   while (true) {
     try {
       await setSaveData();
+      console.log("executando loop de salvar dados no postgres");
     } catch (err) {
       console.error("Erro ao salvar dados no Postgres:", (err as Error).message);
     }
@@ -76,8 +77,8 @@ async function runSetSaveDataLoop(intervalMs: number) {
       console.warn("Inicialização: instrumentos vazios ou nulos.");
     }
 
-    runSetValueInRedisLoop(5000);
-    runSetSaveDataLoop(60000);
+    runSetValueInRedisLoop(5000); // 5 seconds
+    runSetSaveDataLoop(10000); // 1 minute
 
     console.log("Server WebSocket running on port 8080 🚀");
   } catch (err) {
