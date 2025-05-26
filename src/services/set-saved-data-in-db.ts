@@ -28,6 +28,15 @@ export async function setSaveData() {
   try {
     const instrumentsWithValue = await getInstrumentsWithValues();
     if (!instrumentsWithValue) return;
+const normalizedNames = instrumentsWithValue.map(i => normalizeName(i.name));
+
+await prisma.instrument.deleteMany({
+  where: {
+    normalizedName: {
+      notIn: normalizedNames,
+    },
+  },
+});
 
 
     const upsertOperations = instrumentsWithValue.map((instrument) => {
@@ -72,14 +81,6 @@ export async function setSaveData() {
         setPoint: instrument.CurrentSetpoint ?? instrument.FncSetpoint,
         differential: instrument.FncDifferential,
       };
-      prisma.instrument.deleteMany({
-      where: {
-        normalizedName: {
-          not: normalized,
-        },
-      },
-    });
-
 
       return prisma.instrument.upsert({
         where: { normalizedName: normalized },
