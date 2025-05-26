@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import dayjs from "dayjs";
 import { prisma } from "../lib/prisma";
 import { redis } from "../lib/redis";
+import { normalizeName } from "../utils/normalizeName";
 import { getInstrumentsWithValues } from "./get-instruments-with-value";
 
 const instrumentInclude = {
@@ -16,152 +17,161 @@ const instrumentInclude = {
     take: 1,
   },
 } satisfies Prisma.InstrumentInclude;
+
 type InstrumentWithValues = Prisma.InstrumentGetPayload<{
   include: typeof instrumentInclude;
 }>;
 
-const now = dayjs().toDate();
-
 export async function setSaveData() {
+  const now = dayjs().toDate();
+
   try {
-  const instrumentsWithValue = await getInstrumentsWithValues();
-  if (!instrumentsWithValue) return;
+    const instrumentsWithValue = await getInstrumentsWithValues();
+    if (!instrumentsWithValue) return;
 
 
-  const upsertOperations = instrumentsWithValue.map((instrument) => {
-    const isPress = instrument.modelId === 67;
+    const upsertOperations = instrumentsWithValue.map((instrument) => {
+      const isPress = instrument.modelId === 67;
+      const normalized = normalizeName(instrument.name);
+      const status = Array.from(
+        new Set([
+          instrument.IsOpenDoor && "port",
+          instrument.IsDefrost && "deg",
+          instrument.IsRefrigeration && "resf",
+          instrument.IsOutputFan && "vent",
+          instrument.IsOutputDefr1 && "deg",
+          instrument.IsOutputRefr && "resf",
+        ])
+      )
+        .filter(Boolean)
+        .join(",");
 
-    const status = Array.from(
-      new Set([
-        instrument.IsOpenDoor && "port",
-        instrument.IsDefrost && "deg",
-        instrument.IsRefrigeration && "resf",
-        instrument.IsOutputFan && "vent",
-        instrument.IsOutputDefr1 && "deg",
-        instrument.IsOutputRefr && "resf",
-      ])
-    )
-      .filter(Boolean)
-      .join(",");
+      const data = {
+        idSitrad: instrument.id,
+        name: instrument.name,
+        normalizedName: normalized,
+        model: instrument.modelId,
+        status,
+        type: isPress ? "press" : "temp",
+        process:
+          instrument.ProcessStatusText ??
+          (instrument.ProcessStatus === 7
+            ? "Refrigeração"
+            : instrument.ProcessStatus === 1
+            ? "Online"
+            : instrument.ProcessStatus === 8
+            ? "Degelo"
+            : instrument.ProcessStatus?.toString()),
+        updatedAt: now,
+        error: instrument.error || null,
+        isSensorError: isPress
+          ? instrument.IsErrorPressureSensor
+          : instrument.modelId === 72
+          ? instrument.IsErrorS1
+          : instrument.IsSensorError,
+        setPoint: instrument.CurrentSetpoint ?? instrument.FncSetpoint,
+        differential: instrument.FncDifferential,
+      };
+      prisma.instrument.deleteMany({
+      where: {
+        normalizedName: {
+          not: normalized,
+        },
+      },
+    });
 
-    const data = {
-      idSitrad: instrument.id,
-      name: instrument.name,
-      model: instrument.modelId,
-      status,
-      type: isPress ? "press" : "temp",
-      process:
-        instrument.ProcessStatusText ??
-        (instrument.ProcessStatus === 7
-          ? "Refrigeração"
-          : instrument.ProcessStatus === 1
-          ? "Online"
-          : instrument.ProcessStatus === 8
-          ? "Degelo"
-          : instrument.ProcessStatus?.toString()),
-      updatedAt: now,
-      error: instrument.error || null,
-      isSensorError: isPress
-        ? instrument.IsErrorPressureSensor
-        : instrument.modelId === 72
-        ? instrument.IsErrorS1
-        : instrument.IsSensorError,
-      setPoint: instrument.CurrentSetpoint ?? instrument.FncSetpoint,
-      differential: instrument.FncDifferential,
-    };
 
-    // fallback para instrumentos com erro ou sem modelId, só atualiza
-    if (instrument.error || !instrument.modelId) {
       return prisma.instrument.upsert({
-        where: { name: instrument.name },
+        where: { normalizedName: normalized },
         update: data,
         create: data,
         include: instrumentInclude,
       });
-    }
-
-    // Upsert do instrumento
-    return prisma.instrument.upsert({
-      where: { name: instrument.name },
-      update: data,
-      create: data,
-      include: instrumentInclude,
     });
-  });
 
-  const upsertedInstruments = await prisma.$transaction(upsertOperations);
+    const upsertedInstruments = await prisma.$transaction(upsertOperations);
 
-  const createReadingsOperations = instrumentsWithValue.map(
-    async (instrument) => {
+    // Preparação dos dados para inserção
+    const pressuresToInsert: Prisma.PressureCreateInput[] = [];
+    const temperaturesToInsert: Prisma.TemperatureCreateInput[] = [];
+    const instrumentPressureRelations: { instrument_id: string; pressure_id: string }[] = [];
+    const instrumentTemperatureRelations: { instrument_id: string; temperature_id: string }[] = [];
+
+    for (const instrument of instrumentsWithValue) {
       const isPress = instrument.modelId === 67;
       const temperatureValue =
         instrument.modelId === 72 ? instrument.Sensor1 : instrument.Temperature;
-      const instrumentDb = upsertedInstruments.find(
-        (i) => i.name === instrument.name
-      );
-      if (!instrumentDb) return;
-
-      if (instrument.error || !instrument.modelId) {
-    
-        return;
-      }
+      const instrumentDb = upsertedInstruments.find((i) => i.normalizedName === instrument.normalizedName);
+      if (!instrumentDb || instrument.error || !instrument.modelId) continue;
 
       const now = new Date();
 
       if (isPress) {
-
-        const pressure = await prisma.pressure.create({
-          data: {
-            value: instrument.GasPressure,
-            editValue: instrument.GasPressure,
-            createdAt: now,
-            updatedAt: now,
-          },
+        pressuresToInsert.push({
+          value: instrument.GasPressure,
+          editValue: instrument.GasPressure,
+          createdAt: now,
+          updatedAt: now,
         });
-
-        await prisma.instrumentsPressure.create({
-          data: {
-            instrument_id: instrumentDb.id,
-            pressure_id: pressure.id,
-          },
+        instrumentPressureRelations.push({
+          instrument_id: instrumentDb.id,
+          pressure_id: "", 
         });
       } else {
-        const temperature = await prisma.temperature.create({
-          data: {
-            value: temperatureValue,
-            editValue: temperatureValue,
-            createdAt: now,
-            updatedAt: now,
-          },
+        temperaturesToInsert.push({
+          value: temperatureValue,
+          editValue: temperatureValue,
+          createdAt: now,
+          updatedAt: now,
         });
-
-        await prisma.instrumentsTemperature.create({
-          data: {
-            instrument_id: instrumentDb.id,
-            temperature_id: temperature.id,
-          },
+        instrumentTemperatureRelations.push({
+          instrument_id: instrumentDb.id,
+          temperature_id: "", 
         });
       }
     }
-  );
 
-  // Aguarda todas leituras serem criadas
-  await Promise.all(createReadingsOperations);
+    const [createdPressures, createdTemperatures] = await prisma.$transaction([
+      prisma.pressure.createManyAndReturn({
+        data: pressuresToInsert,
+        skipDuplicates: true,
+      }),
+      prisma.temperature.createManyAndReturn({
+        data: temperaturesToInsert,
+        skipDuplicates: true,
+      }),
+    ]);
 
-  // Atualiza cache redis
-  const updatedInstruments = upsertedInstruments
-    .map(formatInstrument)
-    .sort((a, b) => a.displayOrder - b.displayOrder);
-  await redis.set(
-    String(process.env.METADATA_CACHE_KEY),
-    JSON.stringify(updatedInstruments),
-    "EX",
-    15
-  );
+    createdPressures.forEach((pressure, index) => {
+      instrumentPressureRelations[index].pressure_id = pressure.id;
+    });
+    createdTemperatures.forEach((temperature, index) => {
+      instrumentTemperatureRelations[index].temperature_id = temperature.id;
+    });
 
-} catch (error) {
-  console.error("Erro ao salvar dados e atualizar cache:", error);
-}
+    await prisma.$transaction([
+      prisma.instrumentsPressure.createManyAndReturn({
+        data: instrumentPressureRelations,
+        skipDuplicates: true,
+      }),
+      prisma.instrumentsTemperature.createManyAndReturn({
+        data: instrumentTemperatureRelations,
+        skipDuplicates: true,
+      }),
+    ]);
+
+    const updatedInstruments = upsertedInstruments
+      .map(formatInstrument)
+      .sort((a, b) => a.displayOrder - b.displayOrder);
+    await redis.set(
+      String(process.env.METADATA_CACHE_KEY),
+      JSON.stringify(updatedInstruments),
+      "EX",
+      15
+    );
+  } catch (error) {
+    console.error("Erro ao salvar dados e atualizar cache:", error);
+  }
 }
 
 function formatInstrument(saved: InstrumentWithValues) {

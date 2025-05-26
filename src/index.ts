@@ -40,8 +40,8 @@ async function getInstruments() {
 }
 
 async function runSetValueInRedisLoop(intervalMs: number) {
-  while (true) {
-    try {
+   setInterval(async() => {
+     try {
       await setValueInRedis();
       const instruments = await getInstruments();
       if (instruments) {
@@ -50,8 +50,7 @@ async function runSetValueInRedisLoop(intervalMs: number) {
     } catch (err) {
       console.error("Erro na atualização do Redis e broadcast:", (err as Error).message);
     }
-    await new Promise((res) => setTimeout(res, intervalMs));
-  }
+   }, intervalMs);
 }
 
 async function runSetSaveDataLoop(intervalMs: number) {
@@ -66,20 +65,27 @@ async function runSetSaveDataLoop(intervalMs: number) {
 
 (async () => {
   try {
-    await setSaveData();
-    const instruments = await getInstruments();
-       if (instruments) {
-      wss.broadcast(instruments);
-    } else {
-      console.warn("Inicialização: instrumentos vazios ou nulos.");
-    }
+    console.log("Server WebSocket running on port 8080 🚀");
 
-    runSetValueInRedisLoop(5000); // 5 seconds
+    runSetValueInRedisLoop(5000); // 55  seconds
     runSetSaveDataLoop(60000); // 1 minute
 
-    console.log("Server WebSocket running on port 8080 🚀");
+    setImmediate(async () => {
+      try {
+        await setSaveData();
+        const instruments = await getInstruments();
+        if (instruments) {
+          wss.broadcast(instruments);
+        } else {
+          console.warn("Inicialização: instrumentos vazios ou nulos.");
+        }
+      } catch (err) {
+        console.error("Erro na execução inicial:", (err as Error).message);
+      }
+    });
+
   } catch (err) {
-    console.error("Erro na execução inicial:", (err as Error).message);
-    process.exit(1); // encerra o processo se não iniciar corretamente
+    console.error("Erro crítico na inicialização:", (err as Error).message);
+    process.exit(1);
   }
 })();

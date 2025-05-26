@@ -4,7 +4,8 @@
   "main": "index.js",
   "scripts": {
     "dev": "tsx --env-file .env --watch src/index.ts",
-    "start": "tsx --env-file .env src/index.ts"
+    "start": "tsx --env-file .env src/index.ts",
+    "populate": "tsx --env.file .env scripts/fix-normalized-names.ts"
   },
   "keywords": [],
   "author": "",

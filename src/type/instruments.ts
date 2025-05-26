@@ -35,7 +35,8 @@ export interface IInstrument {
   enableInvertStatusCommand: boolean;
   enableProcessStatusTime: boolean;
   temperatureUnityType: number;
-
+  type: string;
+  normalizedName: string;
   setpointRelativeTemp: number;
   IsDataloggerCorrupted: boolean;
   IsManualDatalogger: boolean;
