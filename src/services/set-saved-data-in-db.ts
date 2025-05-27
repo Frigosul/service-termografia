@@ -5,6 +5,8 @@ import { redis } from "../lib/redis";
 import { normalizeName } from "../utils/normalizeName";
 import { getInstrumentsWithValues } from "./get-instruments-with-value";
 
+
+
 const instrumentInclude = {
   temperatures: {
     include: { temperature: true },
@@ -28,16 +30,14 @@ export async function setSaveData() {
   try {
     const instrumentsWithValue = await getInstrumentsWithValues();
     if (!instrumentsWithValue) return;
-const normalizedNames = instrumentsWithValue.map(i => normalizeName(i.name));
+    const normalizedNames = instrumentsWithValue.map(i => normalizeName(i.name));
 
-await prisma.instrument.deleteMany({
-  where: {
-    normalizedName: {
-      notIn: normalizedNames,
-    },
-  },
-});
-
+    await prisma.instrument.updateMany({
+      where: {
+        normalizedName: { notIn: normalizedNames },
+      },
+      data: { isActive: false },
+    });
 
     const upsertOperations = instrumentsWithValue.map((instrument) => {
       const isPress = instrument.modelId === 67;
@@ -67,17 +67,17 @@ await prisma.instrument.deleteMany({
           (instrument.ProcessStatus === 7
             ? "Refrigeração"
             : instrument.ProcessStatus === 1
-            ? "Online"
-            : instrument.ProcessStatus === 8
-            ? "Degelo"
-            : instrument.ProcessStatus?.toString()),
+              ? "Online"
+              : instrument.ProcessStatus === 8
+                ? "Degelo"
+                : instrument.ProcessStatus?.toString()),
         updatedAt: now,
         error: instrument.error || null,
         isSensorError: isPress
           ? instrument.IsErrorPressureSensor
           : instrument.modelId === 72
-          ? instrument.IsErrorS1
-          : instrument.IsSensorError,
+            ? instrument.IsErrorS1
+            : instrument.IsSensorError,
         setPoint: instrument.CurrentSetpoint ?? instrument.FncSetpoint,
         differential: instrument.FncDifferential,
       };
@@ -102,7 +102,11 @@ await prisma.instrument.deleteMany({
       const isPress = instrument.modelId === 67;
       const temperatureValue =
         instrument.modelId === 72 ? instrument.Sensor1 : instrument.Temperature;
-      const instrumentDb = upsertedInstruments.find((i) => i.normalizedName === instrument.normalizedName);
+      const instrumentMap = new Map(
+        upsertedInstruments.map((i) => [i.normalizedName, i])
+      );
+      const instrumentDb = instrumentMap.get(instrument.normalizedName);
+
       if (!instrumentDb || instrument.error || !instrument.modelId) continue;
 
       const now = new Date();
@@ -116,7 +120,7 @@ await prisma.instrument.deleteMany({
         });
         instrumentPressureRelations.push({
           instrument_id: instrumentDb.id,
-          pressure_id: "", 
+          pressure_id: "",
         });
       } else {
         temperaturesToInsert.push({
@@ -127,7 +131,7 @@ await prisma.instrument.deleteMany({
         });
         instrumentTemperatureRelations.push({
           instrument_id: instrumentDb.id,
-          temperature_id: "", 
+          temperature_id: "",
         });
       }
     }
@@ -172,6 +176,8 @@ await prisma.instrument.deleteMany({
     );
   } catch (error) {
     console.error("Erro ao salvar dados e atualizar cache:", error);
+  } finally {
+    await prisma.$disconnect();
   }
 }
 
@@ -181,40 +187,40 @@ function formatInstrument(saved: InstrumentWithValues) {
 
   return saved.type === "press"
     ? {
-        id: saved.id,
-        idSitrad: saved.idSitrad,
-        name: saved.name,
-        model: saved.model,
-        displayOrder: saved.displayOrder,
-        type: "press",
-        process: saved.process,
-        status: saved.status,
-        isSensorError: saved.isSensorError,
-        pressure: pressureData?.editValue ?? null,
-        instrumentCreatedAt: saved.createdAt,
-        createdAt: pressureData?.createdAt ?? null,
-        error: saved.error,
-        maxValue: saved.maxValue,
-        minValue: saved.minValue,
-        setPoint: saved.setPoint,
-      }
+      id: saved.id,
+      idSitrad: saved.idSitrad,
+      name: saved.name,
+      model: saved.model,
+      displayOrder: saved.displayOrder,
+      type: "press",
+      process: saved.process,
+      status: saved.status,
+      isSensorError: saved.isSensorError,
+      pressure: pressureData?.editValue ?? null,
+      instrumentCreatedAt: saved.createdAt,
+      createdAt: pressureData?.createdAt ?? null,
+      error: saved.error,
+      maxValue: saved.maxValue,
+      minValue: saved.minValue,
+      setPoint: saved.setPoint,
+    }
     : {
-        id: saved.id,
-        idSitrad: saved.idSitrad,
-        name: saved.name,
-        model: saved.model,
-        displayOrder: saved.displayOrder,
-        type: "temp",
-        process: saved.process,
-        status: saved.status,
-        isSensorError: saved.isSensorError,
-        temperature: temperatureData?.editValue ?? null,
-        instrumentCreatedAt: saved.createdAt,
-        createdAt: temperatureData?.createdAt ?? null,
-        error: saved.error,
-        maxValue: saved.maxValue,
-        minValue: saved.minValue,
-        setPoint: saved.setPoint,
-        differential: saved.differential,
-      };
+      id: saved.id,
+      idSitrad: saved.idSitrad,
+      name: saved.name,
+      model: saved.model,
+      displayOrder: saved.displayOrder,
+      type: "temp",
+      process: saved.process,
+      status: saved.status,
+      isSensorError: saved.isSensorError,
+      temperature: temperatureData?.editValue ?? null,
+      instrumentCreatedAt: saved.createdAt,
+      createdAt: temperatureData?.createdAt ?? null,
+      error: saved.error,
+      maxValue: saved.maxValue,
+      minValue: saved.minValue,
+      setPoint: saved.setPoint,
+      differential: saved.differential,
+    };
 }
