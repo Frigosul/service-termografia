@@ -1,4 +1,5 @@
 import WebSocket, { WebSocketServer } from "ws";
+import { prisma } from "./lib/prisma";
 import { redis } from "./lib/redis";
 import { setSaveData } from "./services/set-saved-data-in-db";
 import { setValueInRedis } from "./services/set-value-in-redis";
@@ -12,8 +13,8 @@ const wss = new WebSocket.Server({
   host: "0.0.0.0",
 }) as WebSocketServerWithBroadcast;
 
-wss.broadcast = function (data: any) {
-  this.clients.forEach((client) => {
+function broadcast(data: any) {
+  wss.clients.forEach((client) => {
     if (client.readyState === WebSocket.OPEN) {
       client.send(
         JSON.stringify({
@@ -23,7 +24,8 @@ wss.broadcast = function (data: any) {
       );
     }
   });
-};
+}
+wss.broadcast = broadcast;
 
 async function getInstruments() {
   try {
@@ -39,9 +41,9 @@ async function getInstruments() {
   }
 }
 
-async function runSetValueInRedisLoop(intervalMs: number) {
-   setInterval(async() => {
-     try {
+function runSetValueInRedisLoop(intervalMs: number) {
+  setInterval(async () => {
+    try {
       await setValueInRedis();
       const instruments = await getInstruments();
       if (instruments) {
@@ -50,12 +52,11 @@ async function runSetValueInRedisLoop(intervalMs: number) {
     } catch (err) {
       console.error("Erro na atualização do Redis e broadcast:", (err as Error).message);
     }
-   }, intervalMs);
+  }, intervalMs);
 }
-
-async function runSetSaveDataLoop(intervalMs: number) {
- setInterval(async () => {
-     try {
+function runSetSaveDataLoop(intervalMs: number) {
+  setInterval(async () => {
+    try {
       await setSaveData();
     } catch (err) {
       console.error("Erro ao salvar dados no Postgres:", (err as Error).message);
@@ -81,11 +82,14 @@ async function runSetSaveDataLoop(intervalMs: number) {
         }
       } catch (err) {
         console.error("Erro na execução inicial:", (err as Error).message);
+      } finally {
+        await prisma.$disconnect()
       }
     });
 
   } catch (err) {
     console.error("Erro crítico na inicialização:", (err as Error).message);
+    await prisma.$disconnect()
     process.exit(1);
   }
 })();

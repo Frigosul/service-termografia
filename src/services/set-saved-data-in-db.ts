@@ -85,6 +85,8 @@ export async function setSaveData() {
     );
   } catch (error) {
     console.error("Erro ao salvar dados e atualizar cache:", error);
+  } finally {
+    await prisma.$disconnect();
   }
 }
 
@@ -149,8 +151,7 @@ function prepareInsertData(
   const pressuresToInsert: Prisma.PressureCreateInput[] = [];
   const instrumentTemperatureRelations: { instrument_id: string; temperature_id: string }[] = [];
   const instrumentPressureRelations: { instrument_id: string; pressure_id: string }[] = [];
-
-  const now = new Date();
+  const now = dayjs().toDate();
 
   for (const instrument of instruments) {
     const normalized = normalizeName(instrument.name);
