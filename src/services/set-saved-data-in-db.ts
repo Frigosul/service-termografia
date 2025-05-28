@@ -5,6 +5,7 @@ import { redis } from "../lib/redis";
 import { normalizeName } from "../utils/normalizeName";
 import { getInstrumentsWithValues } from "./get-instruments-with-value";
 
+
 const instrumentInclude = {
   temperatures: {
     include: { temperature: true },
@@ -21,6 +22,8 @@ const instrumentInclude = {
 
 
 export async function setSaveData() {
+  const { default: pLimit } = await import('p-limit');
+  const limit = pLimit(Number(process.env.MAX_CONCURRENT_REQUESTS) || 5);
   const now = dayjs().toDate();
 
   try {
@@ -34,17 +37,45 @@ export async function setSaveData() {
       data: { isActive: false },
     });
 
-    const formattedInstruments = [];
+    const instrumentTasks = instruments.map(instrument =>
+      limit(async () => {
+        const normalizedName = normalizeName(instrument.name);
 
-    for (const instrument of instruments) {
-      const normalizedName = normalizeName(instrument.name);
+        const existing = await prisma.instrument.findUnique({
+          where: { normalizedName },
+          include: instrumentInclude,
+        });
 
-      const existing = await prisma.instrument.findUnique({
-        where: { normalizedName },
-        include: instrumentInclude,
-      });
+        const isPress = instrument.modelId === 67;
+        const tempValue = instrument.modelId === 72 ? instrument.Sensor1 : instrument.Temperature;
+        const pressureValue = instrument.GasPressure;
+        const sensorError = isPress
+          ? instrument.IsErrorPressureSensor
+          : instrument.modelId === 72
+            ? instrument.IsErrorS1
+            : instrument.IsSensorError;
 
-      if (instrument.error || !instrument.modelId) {
+        const status = Array.from(
+          new Set([
+            instrument.IsOpenDoor && "port",
+            instrument.IsDefrost && "deg",
+            instrument.IsRefrigeration && "resf",
+            instrument.IsOutputFan && "vent",
+            instrument.IsOutputDefr1 && "deg",
+            instrument.IsOutputRefr && "resf",
+          ])
+        ).filter(Boolean).join(",");
+
+        const process =
+          instrument.ProcessStatusText ??
+          (instrument.ProcessStatus === 7
+            ? "Refrigeração"
+            : instrument.ProcessStatus === 1
+              ? "Online"
+              : instrument.ProcessStatus === 8
+                ? "Degelo"
+                : instrument.ProcessStatus?.toString());
+
         const fallbackData = {
           name: instrument.name,
           normalizedName,
@@ -69,110 +100,69 @@ export async function setSaveData() {
           },
         };
 
+        const instrumentData = instrument.error || !instrument.modelId
+          ? fallbackData
+          : {
+            idSitrad: instrument.id,
+            name: instrument.name,
+            normalizedName,
+            model: instrument.modelId,
+            status,
+            type: isPress ? "press" : "temp",
+            process,
+            updatedAt: now,
+            error: instrument.error || null,
+            isSensorError: !!sensorError,
+            setPoint: instrument.CurrentSetpoint ?? instrument.FncSetpoint ?? 0,
+            differential: instrument.FncDifferential ?? 0,
+            ...(isPress
+              ? {
+                pressures: {
+                  create: {
+                    pressure: {
+                      create: {
+                        value: pressureValue,
+                        editValue: pressureValue,
+                        createdAt: now,
+                        updatedAt: now,
+                      },
+                    },
+                  },
+                },
+              }
+              : {
+                temperatures: {
+                  create: {
+                    temperature: {
+                      create: {
+                        value: tempValue,
+                        editValue: tempValue,
+                        createdAt: now,
+                        updatedAt: now,
+                      },
+                    },
+                  },
+                },
+              }),
+          };
+
         const saved = existing
           ? await prisma.instrument.update({
             where: { normalizedName },
-            data: fallbackData,
+            data: instrumentData,
             include: instrumentInclude,
           })
           : await prisma.instrument.create({
-            data: fallbackData,
+            data: instrumentData,
             include: instrumentInclude,
           });
 
-        formattedInstruments.push(formatInstrument(saved));
-        continue;
-      }
+        return formatInstrument(saved);
+      })
+    );
 
-      const isPress = instrument.modelId === 67;
-      const tempValue = instrument.modelId === 72 ? instrument.Sensor1 : instrument.Temperature;
-      const pressureValue = instrument.GasPressure;
-      const sensorError = isPress
-        ? instrument.IsErrorPressureSensor
-        : instrument.modelId === 72
-          ? instrument.IsErrorS1
-          : instrument.IsSensorError;
+    const formattedInstruments = await Promise.all(instrumentTasks);
 
-      const status = Array.from(
-        new Set([
-          instrument.IsOpenDoor && "port",
-          instrument.IsDefrost && "deg",
-          instrument.IsRefrigeration && "resf",
-          instrument.IsOutputFan && "vent",
-          instrument.IsOutputDefr1 && "deg",
-          instrument.IsOutputRefr && "resf",
-        ])
-      )
-        .filter(Boolean)
-        .join(",");
-
-      const process =
-        instrument.ProcessStatusText ??
-        (instrument.ProcessStatus === 7
-          ? "Refrigeração"
-          : instrument.ProcessStatus === 1
-            ? "Online"
-            : instrument.ProcessStatus === 8
-              ? "Degelo"
-              : instrument.ProcessStatus?.toString());
-
-      const instrumentData = {
-        idSitrad: instrument.id,
-        name: instrument.name,
-        normalizedName,
-        model: instrument.modelId,
-        status,
-        type: isPress ? "press" : "temp",
-        process,
-        updatedAt: now,
-        error: instrument.error || null,
-        isSensorError: !!sensorError,
-        setPoint: instrument.CurrentSetpoint ?? instrument.FncSetpoint ?? 0,
-        differential: instrument.FncDifferential ?? 0,
-        ...(isPress
-          ? {
-            pressures: {
-              create: {
-                pressure: {
-                  create: {
-                    value: pressureValue,
-                    editValue: pressureValue,
-                    createdAt: now,
-                    updatedAt: now,
-                  },
-                },
-              },
-            },
-          }
-          : {
-            temperatures: {
-              create: {
-                temperature: {
-                  create: {
-                    value: tempValue,
-                    editValue: tempValue,
-                    createdAt: now,
-                    updatedAt: now,
-                  },
-                },
-              },
-            },
-          }),
-      };
-
-      const saved = existing
-        ? await prisma.instrument.update({
-          where: { normalizedName },
-          data: instrumentData,
-          include: instrumentInclude,
-        })
-        : await prisma.instrument.create({
-          data: instrumentData,
-          include: instrumentInclude,
-        });
-
-      formattedInstruments.push(formatInstrument(saved));
-    }
 
     formattedInstruments.sort((a, b) => a.displayOrder - b.displayOrder);
 
