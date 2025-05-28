@@ -133,8 +133,8 @@ export async function setSaveData() {
                   create: {
                     pressure: {
                       create: {
-                        value: pressureValue,
-                        editValue: pressureValue,
+                        value: !sensorError ? pressureValue : 0,
+                        editValue: !sensorError ? pressureValue : 0,
                         createdAt: now,
                         updatedAt: now,
                       },
@@ -147,8 +147,8 @@ export async function setSaveData() {
                   create: {
                     temperature: {
                       create: {
-                        value: tempValue,
-                        editValue: tempValue,
+                        value: !sensorError ? tempValue : 0,
+                        editValue: !sensorError ? tempValue : 0,
                         createdAt: now,
                         updatedAt: now,
                       },

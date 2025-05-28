@@ -15,6 +15,12 @@ export async function setValueInRedis() {
       const isPress = instrument.modelId === 67;
       const temperatureValue =
         instrument.modelId === 72 ? instrument.Sensor1 : instrument.Temperature;
+      const sensorError = isPress
+        ? instrument.IsErrorPressureSensor
+        : instrument.modelId === 72
+          ? instrument.IsErrorS1
+          : instrument.IsSensorError;
+
 
       if (instrument.error || !instrument.modelId) {
         return {
@@ -33,32 +39,29 @@ export async function setValueInRedis() {
                 : instrument.ProcessStatus === 8
                   ? "Degelo"
                   : instrument.ProcessStatus?.toString()),
-          isSensorError: isPress
-            ? instrument.IsErrorPressureSensor
-            : instrument.modelId === 72
-              ? instrument.IsErrorS1
-              : instrument.IsSensorError,
+          isSensorError: !!sensorError,
+
           setPoint: instrument.CurrentSetpoint ?? instrument.FncSetpoint,
           differential: instrument.FncDifferential,
           ...(isPress
             ? {
-                pressures: [
-                  {
-                    pressure: {
-                      editValue: instrument.GasPressure,
-                    },
+              pressures: [
+                {
+                  pressure: {
+                    editValue: !sensorError ? instrument.GasPressure : 0,
                   },
-                ],
-              }
+                },
+              ],
+            }
             : {
-                temperatures: [
-                  {
-                    temperature: {
-                      editValue: temperatureValue,
-                    },
+              temperatures: [
+                {
+                  temperature: {
+                    editValue: !sensorError ? temperatureValue : 0,
                   },
-                ],
-              }),
+                },
+              ],
+            }),
         };
       }
 
@@ -90,32 +93,28 @@ export async function setValueInRedis() {
               : instrument.ProcessStatus === 8
                 ? "Degelo"
                 : instrument.ProcessStatus?.toString()),
-        isSensorError: isPress
-          ? instrument.IsErrorPressureSensor
-          : instrument.modelId === 72
-            ? instrument.IsErrorS1
-            : instrument.IsSensorError,
+        isSensorError: !!sensorError,
         setPoint: instrument.CurrentSetpoint ?? instrument.FncSetpoint,
         differential: instrument.FncDifferential,
         ...(isPress
           ? {
-              pressures: [
-                {
-                  pressure: {
-                    editValue: instrument.GasPressure,
-                  },
+            pressures: [
+              {
+                pressure: {
+                  editValue: !sensorError ? instrument.GasPressure : 0,
                 },
-              ],
-            }
+              },
+            ],
+          }
           : {
-              temperatures: [
-                {
-                  temperature: {
-                    editValue: temperatureValue,
-                  },
+            temperatures: [
+              {
+                temperature: {
+                  editValue: !sensorError ? temperatureValue : 0,
                 },
-              ],
-            }),
+              },
+            ],
+          }),
       };
     });
 
@@ -169,8 +168,8 @@ function removeDuplicatesByName(instruments: any[]) {
   return Array.from(map.values());
 }
 function removeWithoutInstrumentsNameInApiSitrad(instruments: any[], instrumentsWithValue: any[]) {
-   const instrumentsNameInApi = instrumentsWithValue.map((instrument) => instrument.name);
-return instruments.filter((instrument) => instrumentsNameInApi.includes(instrument.name));
+  const instrumentsNameInApi = instrumentsWithValue.map((instrument) => instrument.name);
+  return instruments.filter((instrument) => instrumentsNameInApi.includes(instrument.name));
 }
 
 function formatInstrument(saved: any) {
@@ -179,40 +178,40 @@ function formatInstrument(saved: any) {
 
   return saved.type === "press"
     ? {
-        id: saved.id,
-        idSitrad: saved.idSitrad,
-        name: saved.name,
-        model: saved.model,
-        displayOrder: saved.displayOrder,
-        type: "press",
-        process: saved.process,
-        status: saved.status,
-        isSensorError: saved.isSensorError,
-        pressure: pressureData?.editValue ?? null,
-        instrumentCreatedAt: saved.createdAt,
-        createdAt: pressureData?.createdAt ?? null,
-        error: saved.error,
-        maxValue: saved.maxValue,
-        minValue: saved.minValue,
-        setPoint: saved.setPoint,
-      }
+      id: saved.id,
+      idSitrad: saved.idSitrad,
+      name: saved.name,
+      model: saved.model,
+      displayOrder: saved.displayOrder,
+      type: "press",
+      process: saved.process,
+      status: saved.status,
+      isSensorError: saved.isSensorError,
+      pressure: pressureData?.editValue ?? null,
+      instrumentCreatedAt: saved.createdAt,
+      createdAt: pressureData?.createdAt ?? null,
+      error: saved.error,
+      maxValue: saved.maxValue,
+      minValue: saved.minValue,
+      setPoint: saved.setPoint,
+    }
     : {
-        id: saved.id,
-        idSitrad: saved.idSitrad,
-        name: saved.name,
-        model: saved.model,
-        displayOrder: saved.displayOrder,
-        type: "temp",
-        process: saved.process,
-        status: saved.status,
-        isSensorError: saved.isSensorError,
-        temperature: temperatureData?.editValue ?? null,
-        instrumentCreatedAt: saved.createdAt,
-        createdAt: temperatureData?.createdAt ?? null,
-        error: saved.error,
-        maxValue: saved.maxValue,
-        minValue: saved.minValue,
-        setPoint: saved.setPoint,
-        differential: saved.differential,
-      };
+      id: saved.id,
+      idSitrad: saved.idSitrad,
+      name: saved.name,
+      model: saved.model,
+      displayOrder: saved.displayOrder,
+      type: "temp",
+      process: saved.process,
+      status: saved.status,
+      isSensorError: saved.isSensorError,
+      temperature: temperatureData?.editValue ?? null,
+      instrumentCreatedAt: saved.createdAt,
+      createdAt: temperatureData?.createdAt ?? null,
+      error: saved.error,
+      maxValue: saved.maxValue,
+      minValue: saved.minValue,
+      setPoint: saved.setPoint,
+      differential: saved.differential,
+    };
 }
