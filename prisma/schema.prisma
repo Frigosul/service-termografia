@@ -21,10 +21,8 @@ model User {
 
 model Instrument {
   id             String                   @id @default(uuid())
-  name           String                   @unique
-  normalizedName String?                  @unique
+  name           String
   type           String?                  @default("temp")
-  model          Int?
   status         String
   isSensorError  Boolean                  @default(false)
   createdAt      DateTime                 @default(now())
@@ -33,17 +31,19 @@ model Instrument {
   error          String?
   maxValue       Float                    @default(20)
   minValue       Float                    @default(-20)
-  setPoint       Float                    @default(0)
-  differential   Float                    @default(0)
   isActive       Boolean                  @default(true)
   idSitrad       Int                      @default(0)
+  model          Int?
+  setPoint       Float                    @default(0)
+  differential   Float                    @default(0)
   process        String?
-  temperatures   InstrumentsTemperature[]
+  normalizedName String                   @unique
   pressures      InstrumentsPressure[]
+  temperatures   InstrumentsTemperature[]
   unionsAsFirst  UnionInstruments[]       @relation("FirstInstrumentRelation")
   unionsAsSecond UnionInstruments[]       @relation("SecondInstrumentRelation")
 
-  @@index([name, id], name: "idx_instruments_name")
+  @@index([name, id], map: "idx_instruments_name")
   @@map("instruments")
 }
 
@@ -56,7 +56,7 @@ model Temperature {
   userUpdatedAt String?
   instruments   InstrumentsTemperature[]
 
-  @@index([updatedAt, id], name: "idx_temperatures_updated_at")
+  @@index([updatedAt, id], map: "idx_temperatures_updated_at")
   @@map("temperatures")
 }
 
@@ -79,7 +79,7 @@ model Pressure {
   userUpdatedAt String?
   instruments   InstrumentsPressure[]
 
-  @@index([updatedAt, id], name: "idx_pressures_updated_at")
+  @@index([updatedAt, id], map: "idx_pressures_updated_at")
   @@map("pressures")
 }
 
@@ -95,14 +95,14 @@ model InstrumentsPressure {
 
 model UnionInstruments {
   id                   String     @id @default(uuid())
-  name                 String     @unique
-  firstInstrument      Instrument @relation("FirstInstrumentRelation", fields: [first_instrument_id], references: [id])
-  secondInstrument     Instrument @relation("SecondInstrumentRelation", fields: [second_instrument_id], references: [id])
   first_instrument_id  String
   second_instrument_id String
-  isActive             Boolean    @default(true)
   createdAt            DateTime   @default(now())
   updatedAt            DateTime   @default(now())
+  name                 String     @unique
+  isActive             Boolean    @default(true)
+  firstInstrument      Instrument @relation("FirstInstrumentRelation", fields: [first_instrument_id], references: [id])
+  secondInstrument     Instrument @relation("SecondInstrumentRelation", fields: [second_instrument_id], references: [id])
 
   @@map("union_instruments")
 }

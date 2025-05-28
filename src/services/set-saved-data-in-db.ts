@@ -30,12 +30,24 @@ export async function setSaveData() {
     const instruments = await getInstrumentsWithValues();
     if (!instruments?.length) return;
 
-    const normalizedNames = instruments.map(i => normalizeName(i.name));
+    const normalizedNamesFromApi = instruments.map(i => normalizeName(i.name));
 
-    await prisma.instrument.updateMany({
-      where: { normalizedName: { notIn: normalizedNames } },
-      data: { isActive: false },
+    const existingInstruments = await prisma.instrument.findMany({
+      select: { normalizedName: true },
     });
+    const normalizedNamesInDb = existingInstruments.map(i => i.normalizedName);
+
+    const namesToDeactivate = normalizedNamesInDb.filter(name => !normalizedNamesFromApi.includes(name));
+
+    // Deferido para dentro do `limit`, com controle de concorrência
+    const deactivationTasks = namesToDeactivate.map(name =>
+      limit(async () =>
+        await prisma.instrument.update({
+          where: { normalizedName: name },
+          data: { isActive: false, updatedAt: now },
+        })
+      )
+    );
 
     const instrumentTasks = instruments.map(instrument =>
       limit(async () => {
@@ -161,7 +173,10 @@ export async function setSaveData() {
       })
     );
 
-    const formattedInstruments = await Promise.all(instrumentTasks);
+    const [formattedInstruments] = await Promise.all([
+      Promise.all(instrumentTasks),
+      Promise.all(deactivationTasks),
+    ]);
 
 
     formattedInstruments.sort((a, b) => a.displayOrder - b.displayOrder);
