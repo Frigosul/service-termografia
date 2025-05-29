@@ -16,12 +16,7 @@ const wss = new WebSocket.Server({
 function broadcast(data: any) {
   wss.clients.forEach((client) => {
     if (client.readyState === WebSocket.OPEN) {
-      client.send(
-        JSON.stringify({
-          type: "data",
-          payload: data,
-        })
-      );
+      client.send(JSON.stringify({ type: "data", payload: data }));
     }
   });
 }
@@ -41,8 +36,27 @@ async function getInstruments() {
   }
 }
 
+// Evita concorrência entre execuções
+let isSaving = false;
+function runSetSaveDataLoop(intervalMs: number) {
+  setInterval(async () => {
+    if (isSaving) return;
+    isSaving = true;
+    try {
+      await setSaveData();
+    } catch (err) {
+      console.error("Erro ao salvar dados no Postgres:", (err as Error).message);
+    } finally {
+      isSaving = false;
+    }
+  }, intervalMs);
+}
+
+let isUpdatingRedis = false;
 function runSetValueInRedisLoop(intervalMs: number) {
   setInterval(async () => {
+    if (isUpdatingRedis) return;
+    isUpdatingRedis = true;
     try {
       await setValueInRedis();
       const instruments = await getInstruments();
@@ -51,15 +65,8 @@ function runSetValueInRedisLoop(intervalMs: number) {
       }
     } catch (err) {
       console.error("Erro na atualização do Redis e broadcast:", (err as Error).message);
-    }
-  }, intervalMs);
-}
-function runSetSaveDataLoop(intervalMs: number) {
-  setInterval(async () => {
-    try {
-      await setSaveData();
-    } catch (err) {
-      console.error("Erro ao salvar dados no Postgres:", (err as Error).message);
+    } finally {
+      isUpdatingRedis = false;
     }
   }, intervalMs);
 }
@@ -68,25 +75,24 @@ function runSetSaveDataLoop(intervalMs: number) {
   try {
     console.log("Server WebSocket running on port 8080 🚀");
 
-    runSetValueInRedisLoop(5000); // 55  seconds
-    runSetSaveDataLoop(60000); // 1 minute
+    runSetValueInRedisLoop(5000);
+    runSetSaveDataLoop(60000);
 
-    setImmediate(async () => {
-      try {
-        await setSaveData();
-        const instruments = await getInstruments();
-        if (instruments) {
-          wss.broadcast(instruments);
-        } else {
-          console.warn("Inicialização: instrumentos vazios ou nulos.");
-        }
-      } catch (err) {
-        console.error("Erro na execução inicial:", (err as Error).message);
-      }
-    });
+    // Inicialização
+    await setSaveData();
+    const instruments = await getInstruments();
+    if (instruments) {
+      wss.broadcast(instruments);
+    } else {
+      console.warn("Inicialização: instrumentos vazios ou nulos.");
+    }
+
+    // Graceful shutdown
     const shutdown = async () => {
       console.log("Desligando servidor...");
       await prisma.$disconnect();
+      await redis.quit?.();
+      wss.close();
       process.exit(0);
     };
     process.on("SIGINT", shutdown);
@@ -95,6 +101,8 @@ function runSetSaveDataLoop(intervalMs: number) {
   } catch (err) {
     console.error("Erro crítico na inicialização:", (err as Error).message);
     await prisma.$disconnect();
+    await redis.quit?.();
+    wss.close();
     process.exit(1);
   }
 })();
