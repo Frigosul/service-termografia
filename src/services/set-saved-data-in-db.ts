@@ -1,4 +1,3 @@
-import { Prisma } from "@prisma/client";
 import dayjs from "dayjs";
 import { prisma } from "../lib/prisma";
 import { redis } from "../lib/redis";
@@ -6,20 +5,36 @@ import { normalizeName } from "../utils/normalizeName";
 import { getInstrumentsWithValues } from "./get-instruments-with-value";
 
 
-const instrumentInclude = {
-  temperatures: {
-    include: { temperature: true },
-    orderBy: { temperature: { createdAt: "desc" } },
-    take: 1,
-  },
-  pressures: {
-    include: { pressure: true },
-    orderBy: { pressure: { createdAt: "desc" } },
-    take: 1,
-  },
-} satisfies Prisma.InstrumentInclude;
-
-
+// const instrumentInclude = {
+//   temperatures: {
+//     select: {
+//       temperature: {
+//         select: {
+//           value: true,
+//           editValue: true,
+//           createdAt: true,
+//           updatedAt: true,
+//         },
+//       },
+//     },
+//     orderBy: { temperature: { createdAt: "desc" } },
+//     take: 1,
+//   },
+//   pressures: {
+//     select: {
+//       pressure: {
+//         select: {
+//           value: true,
+//           editValue: true,
+//           createdAt: true,
+//           updatedAt: true,
+//         },
+//       },
+//     },
+//     orderBy: { pressure: { createdAt: "desc" } },
+//     take: 1,
+//   },
+// } satisfies Prisma.InstrumentInclude;
 
 export async function setSaveData() {
   const { default: pLimit } = await import('p-limit');
@@ -33,13 +48,13 @@ export async function setSaveData() {
     const normalizedNamesFromApi = instruments.map(i => normalizeName(i.name));
 
     const existingInstruments = await prisma.instrument.findMany({
-      include: instrumentInclude,
+      select: { normalizedName: true },
     });
     const normalizedNamesInDb = existingInstruments.map(i => i.normalizedName);
 
     const namesToDeactivate = normalizedNamesInDb.filter(name => !normalizedNamesFromApi.includes(name));
 
-    // Deferido para dentro do `limit`, com controle de concorrência
+
     const deactivationTasks = namesToDeactivate.map(name =>
       limit(() =>
         prisma.instrument.update({
@@ -155,28 +170,83 @@ export async function setSaveData() {
               }),
           };
 
-        const savedPromise = existing
-          ? prisma.instrument.update({
+        let saved;
+        if (existing) {
+          saved = await prisma.instrument.update({
             where: { normalizedName },
             data: instrumentData,
-            include: instrumentInclude,
-          })
-          : prisma.instrument.create({
-            data: instrumentData,
-            include: instrumentInclude,
+            select: {
+              id: true,
+              idSitrad: true,
+              name: true,
+              model: true,
+              displayOrder: true,
+              type: true,
+              process: true,
+              status: true,
+              isSensorError: true,
+              createdAt: true,
+              error: true,
+              maxValue: true,
+              minValue: true,
+              setPoint: true,
+              differential: true,
+            }
           });
 
-        const saved = await savedPromise;
-        return formatInstrument(saved);
+        } else {
+          saved = await prisma.instrument.create({
+            data: instrumentData,
+            select: {
+              id: true,
+              idSitrad: true,
+              name: true,
+              model: true,
+              displayOrder: true,
+              type: true,
+              process: true,
+              status: true,
+              isSensorError: true,
+              createdAt: true,
+              error: true,
+              maxValue: true,
+              minValue: true,
+              setPoint: true,
+              differential: true,
+            },
+          });
+        }
+        if (!saved) {
+          console.warn(`Instrumento não encontrado ou não salvo: ${instrument.name}`);
+          return null;
+        }
+
+        return {
+          id: saved.id,
+          idSitrad: saved.idSitrad,
+          name: saved.name,
+          model: saved.model,
+          displayOrder: saved.displayOrder ?? 0,
+          type: saved.type,
+          process: saved.process,
+          status: saved.status,
+          isSensorError: saved.isSensorError,
+          pressure: pressureValue,
+          temperature: tempValue,
+          createdAt: saved.createdAt,
+          error: saved.error,
+          maxValue: saved.maxValue,
+          minValue: saved.minValue,
+          setPoint: saved.setPoint,
+          differential: saved.differential,
+        };
       })
     );
 
     await Promise.all(deactivationTasks);
     const formattedInstruments = await Promise.all(instrumentTasks);
 
-
-
-    formattedInstruments.sort((a, b) => a.displayOrder - b.displayOrder);
+    formattedInstruments.sort((a, b) => a!.displayOrder - b!.displayOrder);
 
     await redis.set(
       String(process.env.METADATA_CACHE_KEY),
@@ -189,46 +259,46 @@ export async function setSaveData() {
   }
 }
 
-function formatInstrument(saved: Prisma.InstrumentGetPayload<{ include: typeof instrumentInclude }>) {
-  const temperatureData = saved.temperatures?.[0]?.temperature ?? null;
-  const pressureData = saved.pressures?.[0]?.pressure ?? null;
+// function formatInstrument(saved) {
+//   const temperatureData = saved.temperatures?.[0]?.temperature ?? null;
+//   const pressureData = saved.pressures?.[0]?.pressure ?? null;
 
-  return saved.type === "press"
-    ? {
-      id: saved.id,
-      idSitrad: saved.idSitrad,
-      name: saved.name,
-      model: saved.model,
-      displayOrder: saved.displayOrder,
-      type: "press",
-      process: saved.process,
-      status: saved.status,
-      isSensorError: saved.isSensorError,
-      pressure: pressureData?.editValue ?? null,
-      instrumentCreatedAt: saved.createdAt,
-      createdAt: pressureData?.createdAt ?? null,
-      error: saved.error,
-      maxValue: saved.maxValue,
-      minValue: saved.minValue,
-      setPoint: saved.setPoint,
-    }
-    : {
-      id: saved.id,
-      idSitrad: saved.idSitrad,
-      name: saved.name,
-      model: saved.model,
-      displayOrder: saved.displayOrder,
-      type: "temp",
-      process: saved.process,
-      status: saved.status,
-      isSensorError: saved.isSensorError,
-      temperature: temperatureData?.editValue ?? null,
-      instrumentCreatedAt: saved.createdAt,
-      createdAt: temperatureData?.createdAt ?? null,
-      error: saved.error,
-      maxValue: saved.maxValue,
-      minValue: saved.minValue,
-      setPoint: saved.setPoint,
-      differential: saved.differential,
-    };
-}
+//   return saved.type === "press"
+//     ? {
+//       id: saved.id,
+//       idSitrad: saved.idSitrad,
+//       name: saved.name,
+//       model: saved.model,
+//       displayOrder: saved.displayOrder,
+//       type: "press",
+//       process: saved.process,
+//       status: saved.status,
+//       isSensorError: saved.isSensorError,
+//       pressure: pressureData?.editValue ?? null,
+//       instrumentCreatedAt: saved.createdAt,
+//       createdAt: pressureData?.createdAt ?? null,
+//       error: saved.error,
+//       maxValue: saved.maxValue,
+//       minValue: saved.minValue,
+//       setPoint: saved.setPoint,
+//     }
+//     : {
+//       id: saved.id,
+//       idSitrad: saved.idSitrad,
+//       name: saved.name,
+//       model: saved.model,
+//       displayOrder: saved.displayOrder,
+//       type: "temp",
+//       process: saved.process,
+//       status: saved.status,
+//       isSensorError: saved.isSensorError,
+//       temperature: temperatureData?.editValue ?? null,
+//       instrumentCreatedAt: saved.createdAt,
+//       createdAt: temperatureData?.createdAt ?? null,
+//       error: saved.error,
+//       maxValue: saved.maxValue,
+//       minValue: saved.minValue,
+//       setPoint: saved.setPoint,
+//       differential: saved.differential,
+//     };
+// }
