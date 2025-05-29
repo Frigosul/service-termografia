@@ -82,14 +82,19 @@ function runSetSaveDataLoop(intervalMs: number) {
         }
       } catch (err) {
         console.error("Erro na execução inicial:", (err as Error).message);
-      } finally {
-        await prisma.$disconnect()
       }
     });
+    const shutdown = async () => {
+      console.log("Desligando servidor...");
+      await prisma.$disconnect();
+      process.exit(0);
+    };
+    process.on("SIGINT", shutdown);
+    process.on("SIGTERM", shutdown);
 
   } catch (err) {
     console.error("Erro crítico na inicialização:", (err as Error).message);
-    await prisma.$disconnect()
+    await prisma.$disconnect();
     process.exit(1);
   }
 })();

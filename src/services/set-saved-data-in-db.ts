@@ -50,7 +50,7 @@ export async function setSaveData() {
     );
 
     const instrumentTasks = instruments.map(instrument =>
-      limit(() => {
+      limit(async () => {
         const normalizedName = normalizeName(instrument.name);
 
         const existing = existingInstruments.find(instrument => instrument.normalizedName === normalizedName);
@@ -166,7 +166,8 @@ export async function setSaveData() {
             include: instrumentInclude,
           });
 
-        return savedPromise.then(formatInstrument)
+        const saved = await savedPromise;
+        return formatInstrument(saved);
       })
     );
 
