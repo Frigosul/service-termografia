@@ -24,10 +24,10 @@ async function main() {
 
     if (seen.has(normalized)) {
       console.warn(`⚠️ Duplicado encontrado: ${normalized} (instrument id: ${instrument.id})`);
-       await prisma.instrument.update({
-      where: { id: instrument.id },
-      data: { normalizedName: `${normalized}1` },
-    });
+      await prisma.instrument.update({
+        where: { id: instrument.id },
+        data: { normalizedName: `${normalized}1` },
+      });
       continue;
     }
 

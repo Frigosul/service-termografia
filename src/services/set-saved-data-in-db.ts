@@ -41,8 +41,8 @@ export async function setSaveData() {
 
     // Deferido para dentro do `limit`, com controle de concorrência
     const deactivationTasks = namesToDeactivate.map(name =>
-      limit(async () =>
-        await prisma.instrument.update({
+      limit(() =>
+        prisma.instrument.update({
           where: { normalizedName: name },
           data: { isActive: false, updatedAt: now },
         })
@@ -50,7 +50,7 @@ export async function setSaveData() {
     );
 
     const instrumentTasks = instruments.map(instrument =>
-      limit(async () => {
+      limit(() => {
         const normalizedName = normalizeName(instrument.name);
 
         const existing = existingInstruments.find(instrument => instrument.normalizedName === normalizedName);
@@ -155,25 +155,24 @@ export async function setSaveData() {
               }),
           };
 
-        const saved = existing
-          ? await prisma.instrument.update({
+        const savedPromise = existing
+          ? prisma.instrument.update({
             where: { normalizedName },
             data: instrumentData,
             include: instrumentInclude,
           })
-          : await prisma.instrument.create({
+          : prisma.instrument.create({
             data: instrumentData,
             include: instrumentInclude,
           });
 
-        return formatInstrument(saved);
+        return savedPromise.then(formatInstrument)
       })
     );
 
-    const [formattedInstruments] = await Promise.all([
-      Promise.all(instrumentTasks),
-      Promise.all(deactivationTasks),
-    ]);
+    await Promise.all(deactivationTasks);
+    const formattedInstruments = await Promise.all(instrumentTasks);
+
 
 
     formattedInstruments.sort((a, b) => a.displayOrder - b.displayOrder);
