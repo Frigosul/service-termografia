@@ -33,7 +33,7 @@ export async function setSaveData() {
     const normalizedNamesFromApi = instruments.map(i => normalizeName(i.name));
 
     const existingInstruments = await prisma.instrument.findMany({
-      select: { normalizedName: true },
+      include: instrumentInclude,
     });
     const normalizedNamesInDb = existingInstruments.map(i => i.normalizedName);
 
@@ -53,10 +53,7 @@ export async function setSaveData() {
       limit(async () => {
         const normalizedName = normalizeName(instrument.name);
 
-        const existing = await prisma.instrument.findUnique({
-          where: { normalizedName },
-          include: instrumentInclude,
-        });
+        const existing = existingInstruments.find(instrument => instrument.normalizedName === normalizedName);
 
         const isPress = instrument.modelId === 67;
         const tempValue = instrument.modelId === 72 ? instrument.Sensor1 : instrument.Temperature;
@@ -189,8 +186,6 @@ export async function setSaveData() {
     );
   } catch (error) {
     console.error("Erro ao salvar dados e atualizar cache:", error);
-  } finally {
-    await prisma.$disconnect();
   }
 }
 
