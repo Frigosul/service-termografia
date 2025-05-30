@@ -7,6 +7,8 @@ import { setValueInRedis } from "./services/set-value-in-redis";
 interface WebSocketServerWithBroadcast extends WebSocketServer {
   broadcast: (data: any) => void;
 }
+let saveDataInterval: NodeJS.Timeout;
+let valueInRedisInterval: NodeJS.Timeout;
 
 const wss = new WebSocket.Server({
   port: 8080,
@@ -39,7 +41,7 @@ async function getInstruments() {
 // Evita concorrência entre execuções
 let isSaving = false;
 function runSetSaveDataLoop(intervalMs: number) {
-  setInterval(async () => {
+  saveDataInterval = setInterval(async () => {
     if (isSaving) return;
     isSaving = true;
     try {
@@ -54,7 +56,7 @@ function runSetSaveDataLoop(intervalMs: number) {
 
 let isUpdatingRedis = false;
 function runSetValueInRedisLoop(intervalMs: number) {
-  setInterval(async () => {
+  valueInRedisInterval = setInterval(async () => {
     if (isUpdatingRedis) return;
     isUpdatingRedis = true;
     try {
@@ -90,6 +92,8 @@ function runSetValueInRedisLoop(intervalMs: number) {
     // Graceful shutdown
     const shutdown = async () => {
       console.log("Desligando servidor...");
+      clearInterval(saveDataInterval);
+      clearInterval(valueInRedisInterval);
       await prisma.$disconnect();
       await redis.quit?.();
       wss.close();

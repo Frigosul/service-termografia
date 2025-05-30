@@ -263,8 +263,8 @@ export async function setSaveData() {
       })
     );
 
-    await Promise.all(deactivationTasks);
-    const formattedInstruments = (await Promise.all(instrumentTasks)).filter(Boolean);
+    const allTasks = [...deactivationTasks, ...instrumentTasks];
+    const formattedInstruments = await Promise.all(allTasks);
 
     formattedInstruments.sort((a, b) => a.displayOrder - b.displayOrder);
 
