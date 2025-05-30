@@ -20,219 +20,212 @@ export async function setSaveData() {
 
     const namesToDeactivate = normalizedNamesInDb.filter(name => !normalizedNamesFromApi.includes(name));
 
-    // Processa desativações em batches
-    for (let i = 0; i < namesToDeactivate.length; i += batchSize) {
-      const batch = namesToDeactivate.slice(i, i + batchSize);
-      await Promise.all(batch.map(name =>
-        prisma.instrument.update({
-          where: { normalizedName: name },
-          data: { isActive: false, updatedAt: now },
-        })
-      ));
+    // Desativa sequencialmente
+    for (const name of namesToDeactivate) {
+      await prisma.instrument.update({
+        where: { normalizedName: name },
+        data: { isActive: false, updatedAt: now },
+      });
     }
 
-    // Processa instrumentos em batches
+    // Processa instrumentos sequencialmente
     const formattedInstruments: any[] = [];
-    for (let i = 0; i < instruments.length; i += batchSize) {
-      const batch = instruments.slice(i, i + batchSize);
-      const results = await Promise.all(batch.map(async instrument => {
-        const normalizedName = normalizeName(instrument.name);
-        const existing = existingInstruments.find(i => i.normalizedName === normalizedName);
+    for (const instrument of instruments) {
+      const normalizedName = normalizeName(instrument.name);
+      const existing = existingInstruments.find(i => i.normalizedName === normalizedName);
 
-        const isPress = instrument.modelId === 67;
-        const tempValue = instrument.modelId === 72 ? instrument.Sensor1 : instrument.Temperature;
-        const pressureValue = instrument.GasPressure;
-        const sensorError = isPress
-          ? instrument.IsErrorPressureSensor
-          : instrument.modelId === 72
-            ? instrument.IsErrorS1
-            : instrument.IsSensorError;
+      const isPress = instrument.modelId === 67;
+      const tempValue = instrument.modelId === 72 ? instrument.Sensor1 : instrument.Temperature;
+      const pressureValue = instrument.GasPressure;
+      const sensorError = isPress
+        ? instrument.IsErrorPressureSensor
+        : instrument.modelId === 72
+          ? instrument.IsErrorS1
+          : instrument.IsSensorError;
 
-        const status = Array.from(
-          new Set([
-            instrument.IsOpenDoor && "port",
-            instrument.IsDefrost && "deg",
-            instrument.IsRefrigeration && "resf",
-            instrument.IsOutputFan && "vent",
-            instrument.IsOutputDefr1 && "deg",
-            instrument.IsOutputRefr && "resf",
-          ])
-        ).filter(Boolean).join(",");
+      const status = Array.from(
+        new Set([
+          instrument.IsOpenDoor && "port",
+          instrument.IsDefrost && "deg",
+          instrument.IsRefrigeration && "resf",
+          instrument.IsOutputFan && "vent",
+          instrument.IsOutputDefr1 && "deg",
+          instrument.IsOutputRefr && "resf",
+        ])
+      ).filter(Boolean).join(",");
 
-        const process =
-          instrument.ProcessStatusText ??
-          (instrument.ProcessStatus === 7
-            ? "Refrigeração"
-            : instrument.ProcessStatus === 1
-              ? "Online"
-              : instrument.ProcessStatus === 8
-                ? "Degelo"
-                : instrument.ProcessStatus?.toString());
+      const process =
+        instrument.ProcessStatusText ??
+        (instrument.ProcessStatus === 7
+          ? "Refrigeração"
+          : instrument.ProcessStatus === 1
+            ? "Online"
+            : instrument.ProcessStatus === 8
+              ? "Degelo"
+              : instrument.ProcessStatus?.toString());
 
-        const fallbackData = {
+      const fallbackData = {
+        name: instrument.name,
+        normalizedName,
+        updatedAt: now,
+        error: instrument.error ?? 'Instrument error',
+        type: "temp",
+        status: "",
+        isSensorError: false,
+        setPoint: 0,
+        differential: 0,
+      };
+
+      const instrumentData = instrument.error || !instrument.modelId
+        ? fallbackData
+        : {
+          idSitrad: instrument.id,
           name: instrument.name,
           normalizedName,
+          model: instrument.modelId,
+          status,
+          type: isPress ? "press" : "temp",
+          process,
           updatedAt: now,
-          error: instrument.error ?? 'Instrument error',
-          type: "temp",
-          status: "",
-          isSensorError: false,
-          setPoint: 0,
-          differential: 0,
+          error: instrument.error || null,
+          isSensorError: !!sensorError,
+          setPoint: instrument.CurrentSetpoint ?? instrument.FncSetpoint ?? 0,
+          differential: instrument.FncDifferential ?? 0,
         };
 
-        const instrumentData = instrument.error || !instrument.modelId
-          ? fallbackData
-          : {
-            idSitrad: instrument.id,
-            name: instrument.name,
-            normalizedName,
-            model: instrument.modelId,
-            status,
-            type: isPress ? "press" : "temp",
-            process,
-            updatedAt: now,
-            error: instrument.error || null,
-            isSensorError: !!sensorError,
-            setPoint: instrument.CurrentSetpoint ?? instrument.FncSetpoint ?? 0,
-            differential: instrument.FncDifferential ?? 0,
-          };
+      let result;
+      if (existing) {
+        result = await prisma.$transaction(async (tx) => {
+          const updatedInstrument = await tx.instrument.update({
+            where: { normalizedName },
+            data: instrumentData,
+            select: {
+              id: true,
+              idSitrad: true,
+              name: true,
+              model: true,
+              displayOrder: true,
+              type: true,
+              process: true,
+              status: true,
+              isSensorError: true,
+              createdAt: true,
+              error: true,
+              maxValue: true,
+              minValue: true,
+              setPoint: true,
+              differential: true,
+            }
+          });
 
-        let result;
-        if (existing) {
-          result = await prisma.$transaction(async (tx) => {
-            const updatedInstrument = await tx.instrument.update({
-              where: { normalizedName },
-              data: instrumentData,
-              select: {
-                id: true,
-                idSitrad: true,
-                name: true,
-                model: true,
-                displayOrder: true,
-                type: true,
-                process: true,
-                status: true,
-                isSensorError: true,
-                createdAt: true,
-                error: true,
-                maxValue: true,
-                minValue: true,
-                setPoint: true,
-                differential: true,
+          if (isPress) {
+            await tx.pressure.create({
+              data: {
+                value: pressureValue ?? 0,
+                editValue: pressureValue ?? 0,
+                createdAt: now,
+                updatedAt: now,
+                instruments: {
+                  create: {
+                    instrument_id: updatedInstrument.id,
+                  }
+                }
               }
             });
-
-            if (isPress) {
-              await tx.pressure.create({
-                data: {
-                  value: pressureValue ?? 0,
-                  editValue: pressureValue ?? 0,
-                  createdAt: now,
-                  updatedAt: now,
-                  instruments: {
-                    create: {
-                      instrument_id: updatedInstrument.id,
-                    }
+          } else {
+            await tx.temperature.create({
+              data: {
+                value: tempValue ?? 0,
+                editValue: tempValue ?? 0,
+                createdAt: now,
+                updatedAt: now,
+                instruments: {
+                  create: {
+                    instrument_id: updatedInstrument.id,
                   }
                 }
-              });
-            } else {
-              await tx.temperature.create({
-                data: {
-                  value: tempValue ?? 0,
-                  editValue: tempValue ?? 0,
-                  createdAt: now,
-                  updatedAt: now,
-                  instruments: {
-                    create: {
-                      instrument_id: updatedInstrument.id,
-                    }
-                  }
-                }
-              });
-            }
-
-            return updatedInstrument;
-          });
-        } else {
-          result = await prisma.$transaction(async (tx) => {
-            const createdInstrument = await tx.instrument.create({
-              data: instrumentData,
-              select: {
-                id: true,
-                idSitrad: true,
-                name: true,
-                model: true,
-                displayOrder: true,
-                type: true,
-                process: true,
-                status: true,
-                isSensorError: true,
-                createdAt: true,
-                error: true,
-                maxValue: true,
-                minValue: true,
-                setPoint: true,
-                differential: true,
-              },
+              }
             });
+          }
 
-            if (isPress) {
-              await tx.pressure.create({
-                data: {
-                  value: pressureValue ?? 0,
-                  editValue: pressureValue ?? 0,
-                  createdAt: now,
-                  updatedAt: now,
-                  instruments: {
-                    create: {
-                      instrument_id: createdInstrument.id,
-                    }
-                  }
-                }
-              });
-            } else {
-              await tx.temperature.create({
-                data: {
-                  value: tempValue ?? 0,
-                  editValue: tempValue ?? 0,
-                  createdAt: now,
-                  updatedAt: now,
-                  instruments: {
-                    create: {
-                      instrument_id: createdInstrument.id,
-                    }
-                  }
-                }
-              });
-            }
-
-            return createdInstrument;
+          return updatedInstrument;
+        });
+      } else {
+        result = await prisma.$transaction(async (tx) => {
+          const createdInstrument = await tx.instrument.create({
+            data: instrumentData,
+            select: {
+              id: true,
+              idSitrad: true,
+              name: true,
+              model: true,
+              displayOrder: true,
+              type: true,
+              process: true,
+              status: true,
+              isSensorError: true,
+              createdAt: true,
+              error: true,
+              maxValue: true,
+              minValue: true,
+              setPoint: true,
+              differential: true,
+            },
           });
-        }
 
-        return {
-          id: result.id,
-          idSitrad: result.idSitrad,
-          name: result.name,
-          model: result.model,
-          displayOrder: result.displayOrder ?? 0,
-          type: result.type,
-          process: result.process,
-          status: result.status,
-          isSensorError: result.isSensorError,
-          pressure: pressureValue,
-          temperature: tempValue,
-          createdAt: result.createdAt,
-          error: result.error,
-          maxValue: result.maxValue,
-          minValue: result.minValue,
-          setPoint: result.setPoint,
-          differential: result.differential,
-        };
-      }));
-      formattedInstruments.push(...results);
+          if (isPress) {
+            await tx.pressure.create({
+              data: {
+                value: pressureValue ?? 0,
+                editValue: pressureValue ?? 0,
+                createdAt: now,
+                updatedAt: now,
+                instruments: {
+                  create: {
+                    instrument_id: createdInstrument.id,
+                  }
+                }
+              }
+            });
+          } else {
+            await tx.temperature.create({
+              data: {
+                value: tempValue ?? 0,
+                editValue: tempValue ?? 0,
+                createdAt: now,
+                updatedAt: now,
+                instruments: {
+                  create: {
+                    instrument_id: createdInstrument.id,
+                  }
+                }
+              }
+            });
+          }
+
+          return createdInstrument;
+        });
+      }
+
+      formattedInstruments.push({
+        id: result.id,
+        idSitrad: result.idSitrad,
+        name: result.name,
+        model: result.model,
+        displayOrder: result.displayOrder ?? 0,
+        type: result.type,
+        process: result.process,
+        status: result.status,
+        isSensorError: result.isSensorError,
+        pressure: pressureValue,
+        temperature: tempValue,
+        createdAt: result.createdAt,
+        error: result.error,
+        maxValue: result.maxValue,
+        minValue: result.minValue,
+        setPoint: result.setPoint,
+        differential: result.differential,
+      });
     }
 
     formattedInstruments.sort((a, b) => a.displayOrder - b.displayOrder);
