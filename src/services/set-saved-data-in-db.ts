@@ -22,10 +22,12 @@ export async function setSaveData() {
 
     // Desativa sequencialmente
     for (const name of namesToDeactivate) {
+      console.time(`desativação do instrumento: ${name}`);
       await prisma.instrument.update({
         where: { normalizedName: name },
         data: { isActive: false, updatedAt: now },
       });
+      console.timeEnd(`desativação do instrumento: ${name}`);
     }
 
     // Processa instrumentos sequencialmente
@@ -95,6 +97,7 @@ export async function setSaveData() {
 
       let result;
       if (existing) {
+        console.time(`atualização do instrumento: ${normalizedName}`);
         result = await prisma.$transaction(async (tx) => {
           const updatedInstrument = await tx.instrument.update({
             where: { normalizedName },
@@ -150,7 +153,10 @@ export async function setSaveData() {
 
           return updatedInstrument;
         });
+        console.timeEnd(`atualização do instrumento: ${normalizedName}`);
+
       } else {
+        console.time(`criação do instrumento: ${normalizedName}`);
         result = await prisma.$transaction(async (tx) => {
           const createdInstrument = await tx.instrument.create({
             data: instrumentData,
@@ -205,6 +211,8 @@ export async function setSaveData() {
 
           return createdInstrument;
         });
+        console.timeEnd(`criação do instrumento: ${normalizedName}`);
+
       }
 
       formattedInstruments.push({
