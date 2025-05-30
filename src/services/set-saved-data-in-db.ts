@@ -18,17 +18,17 @@ export async function setSaveData() {
     });
     const normalizedNamesInDb = existingInstruments.map(i => i.normalizedName);
 
-    const namesToDeactivate = normalizedNamesInDb.filter(name => !normalizedNamesFromApi.includes(name));
+    // const namesToDeactivate = normalizedNamesInDb.filter(name => !normalizedNamesFromApi.includes(name));
 
-    // Desativa sequencialmente
-    for (const name of namesToDeactivate) {
-      console.time(`desativação do instrumento: ${name}`);
-      await prisma.instrument.update({
-        where: { normalizedName: name },
-        data: { isActive: false, updatedAt: now },
-      });
-      console.timeEnd(`desativação do instrumento: ${name}`);
-    }
+    // // Desativa sequencialmente
+    // for (const name of namesToDeactivate) {
+    //   console.time(`desativação do instrumento: ${name}`);
+    //   await prisma.instrument.update({
+    //     where: { normalizedName: name },
+    //     data: { isActive: false, updatedAt: now },
+    //   });
+    //   console.timeEnd(`desativação do instrumento: ${name}`);
+    // }
 
     // Processa instrumentos sequencialmente
     const formattedInstruments: any[] = [];
