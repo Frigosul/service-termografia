@@ -4,38 +4,6 @@ import { redis } from "../lib/redis";
 import { normalizeName } from "../utils/normalizeName";
 import { getInstrumentsWithValues } from "./get-instruments-with-value";
 
-
-// const instrumentInclude = {
-//   temperatures: {
-//     select: {
-//       temperature: {
-//         select: {
-//           value: true,
-//           editValue: true,
-//           createdAt: true,
-//           updatedAt: true,
-//         },
-//       },
-//     },
-//     orderBy: { temperature: { createdAt: "desc" } },
-//     take: 1,
-//   },
-//   pressures: {
-//     select: {
-//       pressure: {
-//         select: {
-//           value: true,
-//           editValue: true,
-//           createdAt: true,
-//           updatedAt: true,
-//         },
-//       },
-//     },
-//     orderBy: { pressure: { createdAt: "desc" } },
-//     take: 1,
-//   },
-// } satisfies Prisma.InstrumentInclude;
-
 export async function setSaveData() {
   const { default: pLimit } = await import('p-limit');
   const limit = pLimit(Number(process.env.MAX_CONCURRENT_REQUESTS) || 5);
@@ -126,7 +94,6 @@ export async function setSaveData() {
             differential: instrument.FncDifferential ?? 0,
           };
 
-        // Transação: update/create instrumento + create temperatura/pressão
         let result;
         if (existing) {
           result = await prisma.$transaction(async (tx) => {
@@ -264,7 +231,13 @@ export async function setSaveData() {
     );
 
     const allTasks = [...deactivationTasks, ...instrumentTasks];
-    const formattedInstruments = await Promise.all(allTasks);
+    const formattedInstruments: any[] = [];
+    const batchSize = 50;
+    for (let i = 0; i < allTasks.length; i += batchSize) {
+      const batch = allTasks.slice(i, i + batchSize);
+      const results = await Promise.all(batch);
+      formattedInstruments.push(...results);
+    }
 
     formattedInstruments.sort((a, b) => a.displayOrder - b.displayOrder);
 
