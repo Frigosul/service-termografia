@@ -230,11 +230,14 @@ export async function setSaveData() {
       })
     );
 
+
+    const batchSize = 2;     // igual ao limit
+
     const allTasks = [...deactivationTasks, ...instrumentTasks];
     const formattedInstruments: any[] = [];
-    const batchSize = 50;
     for (let i = 0; i < allTasks.length; i += batchSize) {
       const batch = allTasks.slice(i, i + batchSize);
+      // Aguarda cada batch terminar antes de iniciar o próximo
       const results = await Promise.all(batch);
       formattedInstruments.push(...results);
     }
