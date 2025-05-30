@@ -5,9 +5,8 @@ import { normalizeName } from "../utils/normalizeName";
 import { getInstrumentsWithValues } from "./get-instruments-with-value";
 
 export async function setSaveData() {
-  const { default: pLimit } = await import('p-limit');
-  const limit = pLimit(Number(process.env.MAX_CONCURRENT_REQUESTS) || 5);
   const now = dayjs().toDate();
+  const batchSize = Number(process.env.MAX_CONCURRENT_REQUESTS) || 2;
 
   try {
     const instruments = await getInstrumentsWithValues();
@@ -20,17 +19,23 @@ export async function setSaveData() {
     const normalizedNamesInDb = existingInstruments.map(i => i.normalizedName);
 
     const namesToDeactivate = normalizedNamesInDb.filter(name => !normalizedNamesFromApi.includes(name));
-    const deactivationTasks = namesToDeactivate.map(name =>
-      limit(() =>
+
+    // Processa desativações em batches
+    for (let i = 0; i < namesToDeactivate.length; i += batchSize) {
+      const batch = namesToDeactivate.slice(i, i + batchSize);
+      await Promise.all(batch.map(name =>
         prisma.instrument.update({
           where: { normalizedName: name },
           data: { isActive: false, updatedAt: now },
         })
-      )
-    );
+      ));
+    }
 
-    const instrumentTasks = instruments.map(instrument =>
-      limit(async () => {
+    // Processa instrumentos em batches
+    const formattedInstruments: any[] = [];
+    for (let i = 0; i < instruments.length; i += batchSize) {
+      const batch = instruments.slice(i, i + batchSize);
+      const results = await Promise.all(batch.map(async instrument => {
         const normalizedName = normalizeName(instrument.name);
         const existing = existingInstruments.find(i => i.normalizedName === normalizedName);
 
@@ -76,7 +81,6 @@ export async function setSaveData() {
           differential: 0,
         };
 
-        // Monta os dados do instrumento
         const instrumentData = instrument.error || !instrument.modelId
           ? fallbackData
           : {
@@ -122,8 +126,8 @@ export async function setSaveData() {
             if (isPress) {
               await tx.pressure.create({
                 data: {
-                  value: pressureValue,
-                  editValue: pressureValue,
+                  value: pressureValue ?? 0,
+                  editValue: pressureValue ?? 0,
                   createdAt: now,
                   updatedAt: now,
                   instruments: {
@@ -227,18 +231,7 @@ export async function setSaveData() {
           setPoint: result.setPoint,
           differential: result.differential,
         };
-      })
-    );
-
-
-    const batchSize = 2;     // igual ao limit
-
-    const allTasks = [...deactivationTasks, ...instrumentTasks];
-    const formattedInstruments: any[] = [];
-    for (let i = 0; i < allTasks.length; i += batchSize) {
-      const batch = allTasks.slice(i, i + batchSize);
-      // Aguarda cada batch terminar antes de iniciar o próximo
-      const results = await Promise.all(batch);
+      }));
       formattedInstruments.push(...results);
     }
 
