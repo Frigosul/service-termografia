@@ -16,6 +16,7 @@ export async function setSaveData() {
       select: { id: true, normalizedName: true },
     });
     const normalizedNamesInDb = existingInstruments.map(i => i.normalizedName);
+    const existingNamesSet = new Set(normalizedNamesInDb);
 
     // Desativa instrumentos que não estão mais na API
     const namesToDeactivate = normalizedNamesInDb.filter(name => !normalizedNamesFromApi.includes(name));
@@ -26,10 +27,9 @@ export async function setSaveData() {
       });
     }
 
-    // Map para buscar id do instrumento pelo normalizedName
-    const instrumentIdMap = new Map(existingInstruments.map(i => [i.normalizedName, i.id]));
-
-    // Arrays para batch create
+    // Arrays para batch create / update
+    const instrumentsToCreate: any[] = [];
+    const instrumentsToUpdate: any[] = [];
     const temperatureBatch: any[] = [];
     const pressureBatch: any[] = [];
     const temperatureRelations: any[] = [];
@@ -99,33 +99,47 @@ export async function setSaveData() {
           isActive: true,
         };
 
-      // Upsert instrumento (atualiza se existe, cria se não existe)
-      const upsertedInstrument = await prisma.instrument.upsert({
-        where: { normalizedName },
-        update: instrumentData,
-        create: instrumentData,
-        select: {
-          id: true,
-          idSitrad: true,
-          name: true,
-          model: true,
-          displayOrder: true,
-          type: true,
-          process: true,
-          status: true,
-          isSensorError: true,
-          createdAt: true,
-          error: true,
-          maxValue: true,
-          minValue: true,
-          setPoint: true,
-          differential: true,
-        }
-      });
+      // atualiza se existe, cria se não existe
+      if (existingNamesSet.has(normalizedName)) {
+        instrumentsToUpdate.push({ normalizedName, data: instrumentData });
+      } else {
+        instrumentsToCreate.push(instrumentData);
+      }
+    }
+    // 2. Cria todos os novos de uma vez
+    if (instrumentsToCreate.length) {
+      await prisma.instrument.createMany({ data: instrumentsToCreate });
+    }
+    // 3. Atualiza todos os existentes em paralelo (Promise.all para limitar conexões simultâneas)
+    const updateBatchSize = 50;
+    for (let i = 0; i < instrumentsToUpdate.length; i += updateBatchSize) {
+      const batch = instrumentsToUpdate.slice(i, i + updateBatchSize);
+      await Promise.all(
+        batch.map(item =>
+          prisma.instrument.update({
+            where: { normalizedName: item.normalizedName },
+            data: item.data,
+          })
+        )
+      );
+    }
+    // 4. Busca todos os instrumentos atualizados/criados para pegar os IDs
+    const allInstruments = await prisma.instrument.findMany({
+      where: { normalizedName: { in: instruments.map(i => normalizeName(i.name)) } }
+    });
+    const instrumentIdMap = new Map(allInstruments.map(i => [i.normalizedName, i]));
 
-      // Cria novo registro de temperatura ou pressão
+    for (const instrument of instruments) {
+      const normalizedName = normalizeName(instrument.name);
+      const isPress = instrument.modelId === 67;
+      const tempValue = instrument.modelId === 72 ? instrument.Sensor1 : instrument.Temperature;
+      const pressureValue = instrument.GasPressure;
+      const instrumentObj = instrumentIdMap.get(normalizedName);
+
+      if (!instrumentObj) continue;
+
       if (isPress) {
-        const pressureId = uuidV4()
+        const pressureId = uuidV4();
         pressureBatch.push({
           id: pressureId,
           value: pressureValue ?? 0,
@@ -134,11 +148,11 @@ export async function setSaveData() {
           updatedAt: now,
         });
         pressureRelations.push({
-          instrument_id: upsertedInstrument.id,
+          instrument_id: instrumentObj.id,
           pressure_id: pressureId,
         });
       } else {
-        const tempId = uuidV4()
+        const tempId = uuidV4();
         temperatureBatch.push({
           id: tempId,
           value: tempValue ?? 0,
@@ -147,29 +161,29 @@ export async function setSaveData() {
           updatedAt: now,
         });
         temperatureRelations.push({
-          instrument_id: upsertedInstrument.id,
+          instrument_id: instrumentObj.id,
           temperature_id: tempId,
         });
       }
 
       formattedInstruments.push({
-        id: upsertedInstrument.id,
-        idSitrad: upsertedInstrument.idSitrad,
-        name: upsertedInstrument.name,
-        model: upsertedInstrument.model,
-        displayOrder: upsertedInstrument.displayOrder ?? 0,
-        type: upsertedInstrument.type,
-        process: upsertedInstrument.process,
-        status: upsertedInstrument.status,
-        isSensorError: upsertedInstrument.isSensorError,
+        id: instrumentObj.id,
+        idSitrad: instrumentObj.idSitrad,
+        name: instrumentObj.name,
+        model: instrumentObj.model,
+        displayOrder: instrumentObj.displayOrder ?? 0,
+        type: instrumentObj.type,
+        process: instrumentObj.process,
+        status: instrumentObj.status,
+        isSensorError: instrumentObj.isSensorError,
         pressure: pressureValue,
         temperature: tempValue,
-        createdAt: upsertedInstrument.createdAt,
-        error: upsertedInstrument.error,
-        maxValue: upsertedInstrument.maxValue,
-        minValue: upsertedInstrument.minValue,
-        setPoint: upsertedInstrument.setPoint,
-        differential: upsertedInstrument.differential,
+        createdAt: instrumentObj.createdAt,
+        error: instrumentObj.error,
+        maxValue: instrumentObj.maxValue,
+        minValue: instrumentObj.minValue,
+        setPoint: instrumentObj.setPoint,
+        differential: instrumentObj.differential,
       });
     }
 
