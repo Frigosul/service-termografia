@@ -111,7 +111,7 @@ export async function setSaveData() {
       await prisma.instrument.createMany({ data: instrumentsToCreate });
     }
     // 3. Atualiza todos os existentes em paralelo (Promise.all para limitar conexões simultâneas)
-    const updateBatchSize = 50;
+    const updateBatchSize = 30;
     for (let i = 0; i < instrumentsToUpdate.length; i += updateBatchSize) {
       const batch = instrumentsToUpdate.slice(i, i + updateBatchSize);
       await Promise.all(
