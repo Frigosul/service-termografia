@@ -77,17 +77,17 @@ function runSetValueInRedisLoop(intervalMs: number) {
   try {
     console.log("Server WebSocket running on port 8080 🚀");
 
+    runSetValueInRedisLoop(5000);
+    runSetSaveDataLoop(60000);
+
     // Inicialização
-    await setSaveData();
+    //await setSaveData();
     const instruments = await getInstruments();
     if (instruments) {
       wss.broadcast(instruments);
     } else {
       console.warn("Inicialização: instrumentos vazios ou nulos.");
     }
-
-    runSetValueInRedisLoop(5000);
-    runSetSaveDataLoop(60000);
 
     // Graceful shutdown
     const shutdown = async () => {
@@ -101,6 +101,7 @@ function runSetValueInRedisLoop(intervalMs: number) {
     };
     process.on("SIGINT", shutdown);
     process.on("SIGTERM", shutdown);
+
   } catch (err) {
     console.error("Erro crítico na inicialização:", (err as Error).message);
     await prisma.$disconnect();
@@ -108,5 +109,4 @@ function runSetValueInRedisLoop(intervalMs: number) {
     wss.close();
     process.exit(1);
   }
-
 })();
