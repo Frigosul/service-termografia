@@ -39,14 +39,11 @@ export async function setSaveData() {
     for (const instrument of instruments) {
       const normalizedName = normalizeName(instrument.name);
       const isPress = instrument.modelId === 67;
-      const tempValue = instrument.modelId === 72 ? instrument.Sensor1 : instrument.Temperature;
-      const pressureValue = instrument.GasPressure;
       const sensorError = isPress
         ? instrument.IsErrorPressureSensor
         : instrument.modelId === 72
           ? instrument.IsErrorS1
           : instrument.IsSensorError;
-
       const status = Array.from(
         new Set([
           instrument.IsOpenDoor && "port",
@@ -57,7 +54,6 @@ export async function setSaveData() {
           instrument.IsOutputRefr && "resf",
         ])
       ).filter(Boolean).join(",");
-
       const process =
         instrument.ProcessStatusText ??
         (instrument.ProcessStatus === 7
@@ -67,6 +63,7 @@ export async function setSaveData() {
             : instrument.ProcessStatus === 8
               ? "Degelo"
               : instrument.ProcessStatus?.toString());
+
 
       const fallbackData = {
         name: instrument.name,
@@ -99,19 +96,19 @@ export async function setSaveData() {
           isActive: true,
         };
 
-      // atualiza se existe, cria se não existe
+
       if (existingNamesSet.has(normalizedName)) {
         instrumentsToUpdate.push({ normalizedName, data: instrumentData });
       } else {
         instrumentsToCreate.push(instrumentData);
       }
     }
-    // 2. Cria todos os novos de uma vez
+
     if (instrumentsToCreate.length) {
       await prisma.instrument.createMany({ data: instrumentsToCreate });
     }
     // 3. Atualiza todos os existentes em paralelo (Promise.all para limitar conexões simultâneas)
-    const updateBatchSize = 30;
+    const updateBatchSize = 10;
     for (let i = 0; i < instrumentsToUpdate.length; i += updateBatchSize) {
       const batch = instrumentsToUpdate.slice(i, i + updateBatchSize);
       await Promise.all(
