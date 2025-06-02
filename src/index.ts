@@ -1,7 +1,7 @@
 import WebSocket, { WebSocketServer } from "ws";
 import { prisma } from "./lib/prisma";
 import { redis } from "./lib/redis";
-import { setSaveData } from "./services/set-saved-data-in-db";
+import { setSaveData } from "./services/set-save-data";
 import { setValueInRedis } from "./services/set-value-in-redis";
 
 interface WebSocketServerWithBroadcast extends WebSocketServer {
