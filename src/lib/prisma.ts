@@ -7,11 +7,11 @@ type GlobalThisWithPrismaClient = typeof globalThis & {
 
 const getPrismaClient = () => {
   if (process.env.NODE_ENV === `production`) {
-    return new PrismaClient()
+    return new PrismaClient({ log: [`query`, `info`, `warn`, `error`] })
   } else {
     const newGlobalThis = globalThis as GlobalThisWithPrismaClient
     if (!newGlobalThis[prismaClientPropertyName]) {
-      newGlobalThis[prismaClientPropertyName] = new PrismaClient()
+      newGlobalThis[prismaClientPropertyName] = new PrismaClient({ log: [`query`, `info`, `warn`, `error`] })
     }
     return newGlobalThis[prismaClientPropertyName]
   }

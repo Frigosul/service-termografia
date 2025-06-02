@@ -81,7 +81,7 @@ function runSetValueInRedisLoop(intervalMs: number) {
     runSetSaveDataLoop(60000);
 
     // Inicialização
-    //await setSaveData();
+    await setSaveData();
     const instruments = await getInstruments();
     if (instruments) {
       wss.broadcast(instruments);

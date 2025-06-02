@@ -12,9 +12,11 @@ export async function setSaveData() {
     if (!instruments?.length) return;
 
     const normalizedNamesFromApi = instruments.map(i => normalizeName(i.name));
+    console.log("Inicio do await prisma.instrument.findMany");
     const existingInstruments = await prisma.instrument.findMany({
       select: { id: true, normalizedName: true },
     });
+    console.log("Fim do await prisma.instrument.findMany");
     const normalizedNamesInDb = existingInstruments.map(i => i.normalizedName);
     const existingNamesSet = new Set(normalizedNamesInDb);
 
@@ -121,9 +123,11 @@ export async function setSaveData() {
       );
     }
     // 4. Busca todos os instrumentos atualizados/criados para pegar os IDs
+    console.log("Inicio do await prisma.instrument.findMany2");
     const allInstruments = await prisma.instrument.findMany({
       where: { normalizedName: { in: instruments.map(i => normalizeName(i.name)) } }
     });
+    console.log("Fim do await prisma.instrument.findMany2");
     const instrumentIdMap = new Map(allInstruments.map(i => [i.normalizedName, i]));
 
     for (const instrument of instruments) {
