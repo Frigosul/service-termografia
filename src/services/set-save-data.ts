@@ -21,13 +21,11 @@ export async function setSaveData() {
     // Desativa instrumentos que não estão mais na API
     const namesToDeactivate = normalizedNamesInDb.filter(name => !normalizedNamesFromApi.includes(name));
     if (namesToDeactivate.length) {
-      console.time("update normalized name de instrumentos");
 
       await prisma.instrument.updateMany({
         where: { normalizedName: { in: namesToDeactivate } },
         data: { isActive: false, updatedAt: now },
       });
-      console.timeEnd("update normalized name de instrumentos");
 
     }
 
@@ -109,13 +107,10 @@ export async function setSaveData() {
     }
 
     if (instrumentsToCreate.length) {
-      console.time("create instrumentos");
       await prisma.instrument.createMany({ data: instrumentsToCreate });
-      console.timeEnd("create instrumentos");
 
     }
     // 3. Atualiza todos os existentes em paralelo (Promise.all para limitar conexões simultâneas)
-    console.time("update instrumentos");
     const updateBatchSize = 10;
     for (let i = 0; i < instrumentsToUpdate.length; i += updateBatchSize) {
       const batch = instrumentsToUpdate.slice(i, i + updateBatchSize);
@@ -128,14 +123,11 @@ export async function setSaveData() {
         )
       );
     }
-    console.timeEnd("update instrumentos");
 
     // 4. Busca todos os instrumentos atualizados/criados para pegar os IDs
-    console.time("findMany instrumentos id");
     const allInstruments = await prisma.instrument.findMany({
       where: { normalizedName: { in: instruments.map(i => normalizeName(i.name)) } }
     });
-    console.timeEnd("findMany instrumentos id");
 
     const instrumentIdMap = new Map(allInstruments.map(i => [i.normalizedName, i]));
 
@@ -199,21 +191,17 @@ export async function setSaveData() {
 
     // Cria todos os registros de temperatura e pressão em lote
     if (temperatureBatch.length) {
-      console.time("createMany temperaturas");
       await prisma.temperature.createMany({ data: temperatureBatch });
       await prisma.instrumentsTemperature.createMany({
         data: temperatureRelations,
       });
-      console.timeEnd("createMany temperaturas");
 
     }
     if (pressureBatch.length) {
-      console.time("createMany pressões");
       await prisma.pressure.createMany({ data: pressureBatch });
       await prisma.instrumentsPressure.createMany({
         data: pressureRelations,
       });
-      console.timeEnd("createMany pressões");
 
     }
 
