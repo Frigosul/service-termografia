@@ -16,22 +16,27 @@ const wss = new WebSocket.Server({
 }) as WebSocketServerWithBroadcast;
 
 function broadcast(data: any) {
+  console.log("Inicio broadcast " + new Date().toISOString());
   wss.clients.forEach((client) => {
     if (client.readyState === WebSocket.OPEN) {
       client.send(JSON.stringify({ type: "data", payload: data }));
     }
   });
+  console.log("Fim broadcast " + new Date().toISOString());
 }
 wss.broadcast = broadcast;
 
 async function getInstruments() {
   try {
+    console.log("Inicio getInstruments " + new Date().toISOString());
     const instruments = await redis.get(String(process.env.METADATA_CACHE_KEY));
     if (!instruments) {
       console.warn("Nenhum instrumento encontrado no Redis");
       return null;
     }
+    console.log("Fim getInstruments " + new Date().toISOString());
     return JSON.parse(instruments);
+
   } catch (error) {
     console.error("Erro ao buscar instrumentos do Redis:", error);
     return null;
@@ -41,6 +46,7 @@ async function getInstruments() {
 // Evita concorrência entre execuções
 let isSaving = false;
 function runSetSaveDataLoop(intervalMs: number) {
+  console.log("Inicio runSetSaveDataLoop " + new Date().toISOString());
   saveDataInterval = setInterval(async () => {
     if (isSaving) return;
     isSaving = true;
@@ -50,12 +56,14 @@ function runSetSaveDataLoop(intervalMs: number) {
       console.error("Erro ao salvar dados no Postgres:", (err as Error).message);
     } finally {
       isSaving = false;
+      console.log("Fim runSetSaveDataLoop " + new Date().toISOString());
     }
   }, intervalMs);
 }
 
 let isUpdatingRedis = false;
 function runSetValueInRedisLoop(intervalMs: number) {
+  console.log("Inicio runSetValueInRedisLoop " + new Date().toISOString());
   valueInRedisInterval = setInterval(async () => {
     if (isUpdatingRedis) return;
     isUpdatingRedis = true;
@@ -69,6 +77,7 @@ function runSetValueInRedisLoop(intervalMs: number) {
       console.error("Erro na atualização do Redis e broadcast:", (err as Error).message);
     } finally {
       isUpdatingRedis = false;
+      console.log("Fim runSetValueInRedisLoop " + new Date().toISOString());
     }
   }, intervalMs);
 }
