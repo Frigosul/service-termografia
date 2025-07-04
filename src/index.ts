@@ -79,7 +79,7 @@ function runSetValueInRedisLoop(intervalMs: number) {
     console.log("Server WebSocket running on port 8080 🚀");
 
     runSetValueInRedisLoop(5000);
-    runSetSaveDataLoop(60000);
+    runSetSaveDataLoop(300000); // Executa a cada 5 minutos
 
     // Inicialização
     await setSaveData();
