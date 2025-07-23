@@ -6,6 +6,7 @@ import { getInstrumentsWithValues } from "./get-instruments-with-value";
 export async function setSaveData() {
   try {
     const instruments = await getInstrumentsWithValues();
+
     if (!instruments?.length) return;
     const allInstruments = await prisma.instrument.findMany({
       select: {
@@ -40,15 +41,64 @@ export async function setSaveData() {
 
       for (const inst of instruments) {
         const slug = createSlug(inst.name);
+        const existing = slugToInstrument.get(slug);
 
-        // Pula se há erro e sem modelId
-        if (inst.error && !inst.modelId) continue;
+        if (inst.error && !inst.modelId) {
+          if (existing) {
+            await tx.instrument.update({
+              where: { id: existing.id },
+              data: {
+                name: inst.name,
+                model: inst.modelId,
+                isActive: true,
+              },
+            });
+            instrumentsForCache.push({
+              id: existing.id,
+              idSitrad: inst.id,
+              name: inst.name,
+              slug,
+              model: null,
+              type: null,
+              isActive: true,
+              minValue: existing.minValue ?? null,
+              maxValue: existing.maxValue ?? null,
+              orderDisplay: existing.orderDisplay ?? 0,
+              error: inst.error,
+            });
+          } else {
+            const create = await tx.instrument.create({
+              data: {
+                idSitrad: inst.id,
+                name: inst.name,
+                model: 72,
+                slug: createSlug(inst.name),
+                type: 'TEMPERATURE',
+
+              }
+            })
+
+            instrumentsForCache.push({
+              id: create.id,
+              idSitrad: inst.id,
+              name: inst.name,
+              slug: createSlug(inst.name),
+              model: create.model,
+              type: create.type,
+              isActive: create.isActive,
+              minValue: create.minValue,
+              maxValue: create.maxValue,
+              orderDisplay: create.orderDisplay,
+              error: inst.error,
+            });
+          }
+          continue;
+        }
 
         const isPressure = inst.modelId === 67;
         const value =
           inst.modelId === 72 ? inst.Sensor1 : inst.Temperature;
 
-        const existing = slugToInstrument.get(slug);
 
         if (existing) {
           // UPDATE
@@ -124,7 +174,6 @@ export async function setSaveData() {
 
     // Ordenar antes de salvar no cache
     instrumentsForCache.sort((a, b) => a.orderDisplay - b.orderDisplay);
-
     await redis.set(
       String(process.env.METADATA_CACHE_KEY),
       JSON.stringify(instrumentsForCache),
