@@ -19,90 +19,57 @@ model User {
   @@map("users")
 }
 
-model Instrument {
-  id             String                   @id @default(uuid())
-  name           String
-  type           String?                  @default("temp")
-  status         String
-  isSensorError  Boolean                  @default(false)
-  createdAt      DateTime                 @default(now())
-  updatedAt      DateTime                 @default(now())
-  displayOrder   Int                      @default(autoincrement())
-  error          String?
-  maxValue       Float                    @default(20)
-  minValue       Float                    @default(-20)
-  isActive       Boolean                  @default(true)
-  idSitrad       Int                      @default(0)
-  model          Int?
-  setPoint       Float                    @default(0)
-  differential   Float                    @default(0)
-  process        String?
-  normalizedName String                   @unique
-  pressures      InstrumentsPressure[]
-  temperatures   InstrumentsTemperature[]
-  unionsAsFirst  UnionInstruments[]       @relation("FirstInstrumentRelation")
-  unionsAsSecond UnionInstruments[]       @relation("SecondInstrumentRelation")
+enum InstrumentType {
+  TEMPERATURE
+  PRESSURE
+}
 
-  @@index([name, id], map: "idx_instruments_name")
+model Instrument {
+  id                     String           @id @default(uuid())
+  name                   String
+  slug                   String           @unique
+  type                   InstrumentType
+  model                  Int
+  orderDisplay           Int              @default(autoincrement()) @map("order_display")
+  maxValue               Float            @default(100) @map("max_value")
+  minValue               Float            @default(-100) @map("min_value")
+  isActive               Boolean          @default(true) @map("is_active")
+  idSitrad               Int?             @map("id_sitrad")
+  createdAt              DateTime         @default(now()) @map("created_at")
+  updatedAt              DateTime         @updatedAt @map("updated_at")
+  instrumentData         InstrumentData[]
+  joinAsFirstInstrument  JoinInstrument[] @relation("FirstInstrument")
+  joinAsSecondInstrument JoinInstrument[] @relation("SecondInstrument")
+
   @@map("instruments")
 }
 
-model Temperature {
-  id            String                   @id @default(uuid())
-  value         Float
-  createdAt     DateTime                 @default(now())
-  editValue     Float
-  updatedAt     DateTime?
-  userUpdatedAt String?
-  instruments   InstrumentsTemperature[]
+model InstrumentData {
+  id           String     @id @default(uuid())
+  data         Float
+  editData     Float      @map("edit_data")
+  generateData Float?     @map("generate_data")
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+  userEditData String?    @map("user_edit_data")
+  instrumentId String     @map("instrument_id")
+  instrument   Instrument @relation(fields: [instrumentId], references: [id])
 
-  @@index([updatedAt, id], map: "idx_temperatures_updated_at")
-  @@map("temperatures")
+  @@index([instrumentId, createdAt], map: "instrument_time_index")
+  @@map("instrument_data")
 }
 
-model InstrumentsTemperature {
-  instrument_id  String
-  temperature_id String
-  instruments    Instrument  @relation(fields: [instrument_id], references: [id], onDelete: Cascade)
-  temperature    Temperature @relation(fields: [temperature_id], references: [id])
+model JoinInstrument {
+  id                 String     @id @default(uuid())
+  name               String     @unique
+  firstInstrumentId  String     @map("first_instrument_id")
+  secondInstrumentId String     @map("second_instrument_id")
+  isActive           Boolean    @default(true)
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @default(now())
+  firstInstrument    Instrument @relation("FirstInstrument", fields: [firstInstrumentId], references: [id])
+  secondInstrument   Instrument @relation("SecondInstrument", fields: [secondInstrumentId], references: [id])
 
-  @@id([instrument_id, temperature_id])
-  @@map("temperature_instrument")
-}
-
-model Pressure {
-  id            String                @id @default(uuid())
-  value         Float
-  createdAt     DateTime              @default(now())
-  editValue     Float
-  updatedAt     DateTime?
-  userUpdatedAt String?
-  instruments   InstrumentsPressure[]
-
-  @@index([updatedAt, id], map: "idx_pressures_updated_at")
-  @@map("pressures")
-}
-
-model InstrumentsPressure {
-  instrument_id String
-  pressure_id   String
-  instruments   Instrument @relation(fields: [instrument_id], references: [id], onDelete: Cascade)
-  pressure      Pressure   @relation(fields: [pressure_id], references: [id])
-
-  @@id([instrument_id, pressure_id])
-  @@map("pressure_instrument")
-}
-
-model UnionInstruments {
-  id                   String     @id @default(uuid())
-  first_instrument_id  String
-  second_instrument_id String
-  createdAt            DateTime   @default(now())
-  updatedAt            DateTime   @default(now())
-  name                 String     @unique
-  isActive             Boolean    @default(true)
-  firstInstrument      Instrument @relation("FirstInstrumentRelation", fields: [first_instrument_id], references: [id])
-  secondInstrument     Instrument @relation("SecondInstrumentRelation", fields: [second_instrument_id], references: [id])
-
+  @@unique([firstInstrumentId, secondInstrumentId], name: "unique_instruments_pair")
   @@map("union_instruments")
 }
