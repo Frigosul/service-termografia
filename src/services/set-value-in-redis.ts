@@ -26,6 +26,7 @@ export async function setValueInRedis() {
         return {
           idSitrad: instrument.id,
           name: instrument.name,
+          slug: instrument.slug,
           model: instrument.modelId,
           status: "",
           error: instrument.error,
@@ -40,7 +41,6 @@ export async function setValueInRedis() {
                   ? "Degelo"
                   : instrument.ProcessStatus?.toString()),
           isSensorError: !!sensorError,
-
           setPoint: instrument.CurrentSetpoint ?? instrument.FncSetpoint,
           differential: instrument.FncDifferential,
           ...(isPress
@@ -81,6 +81,7 @@ export async function setValueInRedis() {
       return {
         idSitrad: instrument.id,
         name: instrument.name,
+        slug: instrument.slug,
         model: instrument.modelId,
         status,
         type: isPress ? "press" : "temp",
@@ -181,6 +182,7 @@ function formatInstrument(saved: any) {
       id: saved.id,
       idSitrad: saved.idSitrad,
       name: saved.name,
+      slug: saved.slug,
       model: saved.model,
       displayOrder: saved.displayOrder,
       type: "press",
@@ -199,6 +201,7 @@ function formatInstrument(saved: any) {
       id: saved.id,
       idSitrad: saved.idSitrad,
       name: saved.name,
+      slug: saved.slug,
       model: saved.model,
       displayOrder: saved.displayOrder,
       type: "temp",

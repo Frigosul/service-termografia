@@ -5,6 +5,7 @@ export interface IInstrument {
   IsErrorPressureSensor?: boolean;
   converterId: number;
   name: string;
+  slug?: string;
   address: number;
   statusId: number;
   status: string;
