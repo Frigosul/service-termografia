@@ -17,7 +17,7 @@ export async function setSaveData() {
         orderDisplay: true,
       },
     });
-    // Mapeia slugs para instrumentos existentes
+
     const slugToInstrument = new Map(
       allInstruments.map((i) => [i.slug, i])
     );
@@ -94,9 +94,8 @@ export async function setSaveData() {
           }
           continue;
         }
-
         const isPressure = inst.modelId === 67;
-        const value =
+        const value = inst.modelId === 67 ? inst.GasPressure :
           inst.modelId === 72 ? inst.Sensor1 : inst.Temperature;
 
 
@@ -141,6 +140,7 @@ export async function setSaveData() {
               slug,
               type: isPressure ? "PRESSURE" : "TEMPERATURE",
               isActive: true,
+
             },
           });
 
@@ -166,6 +166,7 @@ export async function setSaveData() {
       }
 
       if (dataPoints.length) {
+        console.log(dataPoints);
         await tx.instrumentData.createMany({
           data: dataPoints,
         });

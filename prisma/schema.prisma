@@ -19,24 +19,19 @@ model User {
   @@map("users")
 }
 
-enum InstrumentType {
-  TEMPERATURE
-  PRESSURE
-}
-
 model Instrument {
   id                     String           @id @default(uuid())
   name                   String
-  slug                   String           @unique
-  type                   InstrumentType
   model                  Int
-  orderDisplay           Int              @default(autoincrement()) @map("order_display")
+  createdAt              DateTime         @default(now()) @map("created_at")
+  idSitrad               Int?             @map("id_sitrad")
+  isActive               Boolean          @default(true) @map("is_active")
   maxValue               Float            @default(100) @map("max_value")
   minValue               Float            @default(-100) @map("min_value")
-  isActive               Boolean          @default(true) @map("is_active")
-  idSitrad               Int?             @map("id_sitrad")
-  createdAt              DateTime         @default(now()) @map("created_at")
+  orderDisplay           Int              @default(autoincrement()) @map("order_display")
+  slug                   String           @unique
   updatedAt              DateTime         @updatedAt @map("updated_at")
+  type                   InstrumentType
   instrumentData         InstrumentData[]
   joinAsFirstInstrument  JoinInstrument[] @relation("FirstInstrument")
   joinAsSecondInstrument JoinInstrument[] @relation("SecondInstrument")
@@ -46,13 +41,13 @@ model Instrument {
 
 model InstrumentData {
   id           String     @id @default(uuid())
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+  instrumentId String     @map("instrument_id")
+  userEditData String?    @map("user_edit_data")
   data         Float
   editData     Float      @map("edit_data")
   generateData Float?     @map("generate_data")
-  createdAt    DateTime   @default(now()) @map("created_at")
-  updatedAt    DateTime   @updatedAt @map("updated_at")
-  userEditData String?    @map("user_edit_data")
-  instrumentId String     @map("instrument_id")
   instrument   Instrument @relation(fields: [instrumentId], references: [id])
 
   @@index([instrumentId, createdAt], map: "instrument_time_index")
@@ -72,4 +67,9 @@ model JoinInstrument {
 
   @@unique([firstInstrumentId, secondInstrumentId], name: "unique_instruments_pair")
   @@map("union_instruments")
+}
+
+enum InstrumentType {
+  TEMPERATURE
+  PRESSURE
 }
