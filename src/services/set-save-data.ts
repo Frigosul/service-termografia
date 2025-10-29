@@ -23,7 +23,6 @@ export async function setSaveData() {
     );
     const slugsFromApi = instruments.map((i) => createSlug(i.name));
 
-    // Slugs que existem no banco mas não estão na API → desativar
     const toDeactivate = allInstruments
       .map((i) => i.slug)
       .filter((slug) => !slugsFromApi.includes(slug));
@@ -100,7 +99,7 @@ export async function setSaveData() {
 
 
         if (existing) {
-          // UPDATE
+
           await tx.instrument.update({
             where: { id: existing.id },
             data: {
@@ -131,7 +130,7 @@ export async function setSaveData() {
 
           });
         } else {
-          // CREATE
+
           const created = await tx.instrument.create({
             data: {
               idSitrad: inst.id,
@@ -166,14 +165,20 @@ export async function setSaveData() {
       }
 
       if (dataPoints.length) {
-        console.log(dataPoints);
+        const sanitized = dataPoints.map(dp => ({
+          ...dp,
+          data: dp.data == null ? 0 : dp.data,
+          editData: dp.editData == null ? 0 : dp.editData,
+        }));
+
         await tx.instrumentData.createMany({
-          data: dataPoints,
+          data: sanitized,
         });
       }
+
     });
 
-    // Ordenar antes de salvar no cache
+
     instrumentsForCache.sort((a, b) => a.orderDisplay - b.orderDisplay);
     await redis.set(
       String(process.env.METADATA_CACHE_KEY),
