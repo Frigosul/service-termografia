@@ -11,7 +11,7 @@ let saveDataInterval: NodeJS.Timeout;
 let valueInRedisInterval: NodeJS.Timeout;
 
 const wss = new WebSocket.Server({
-  port: 8080,
+  port: Number(process.env.WS_PORT ?? 8080),
   host: "0.0.0.0",
 }) as WebSocketServerWithBroadcast;
 
@@ -76,7 +76,7 @@ function runSetValueInRedisLoop(intervalMs: number) {
 
 (async () => {
   try {
-    console.log("Server WebSocket running on port 8080 🚀");
+    console.log(`Server WebSocket running on port ${wss.options.port} 🚀`);
 
     runSetValueInRedisLoop(5000);
     runSetSaveDataLoop(60000); // Executa a cada 1 minuto
